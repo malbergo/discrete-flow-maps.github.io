@@ -1,0 +1,383 @@
+/* ═══════════════════════════════════════════════════════════
+   Discrete Flow Maps — Stylesheet
+   Color palette from mean_denoiser.py / stochastic_interpolant_frame.py
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --bg:           #ffffff;
+  --ink:          #2e4552;
+  --teal:         #2f533f;
+  --maroon:       #965c58;
+  --simplex-fill: #f2eee0;
+  --box-edge:     #c3c3c3;
+  --cloud:        #90a0aa;
+  --gold:         #d4a843;
+  --green-1:      #2f533f;
+  --green-2:      #3d604c;
+  --green-3:      #4c6b5a;
+
+  --font-body:  'Inter', 'Helvetica Neue', system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+}
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.65;
+  font-size: clamp(17px, 1.25vw, 22px);
+}
+
+::selection {
+  background: rgba(47, 83, 63, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HERO
+   ═══════════════════════════════════════════════════════════ */
+
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+}
+
+.hero__inner {
+  max-width: 680px;
+  text-align: center;
+}
+
+.hero__eyebrow {
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cloud);
+  margin-bottom: 1.2rem;
+  font-weight: 500;
+}
+
+.hero__title {
+  font-size: clamp(2.6rem, 5.5vw, 4.8rem);
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.hero__rule {
+  width: 60px;
+  height: 3px;
+  background: var(--teal);
+  margin: 1.8rem auto;
+  border-radius: 2px;
+}
+
+.hero__abstract {
+  font-size: 1em;
+  color: var(--ink);
+  opacity: 0.8;
+  line-height: 1.75;
+  max-width: 580px;
+  margin: 0 auto 2rem;
+}
+
+.hero__abstract em {
+  font-style: italic;
+  color: var(--teal);
+  font-weight: 500;
+}
+
+.hero__links {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 3rem;
+}
+
+.hero__link {
+  display: inline-block;
+  padding: 0.55rem 1.6rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 0.2s, color 0.2s;
+}
+
+.hero__link:hover {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.hero__scroll-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--cloud);
+  font-size: 0.75em;
+  letter-spacing: 0.04em;
+  animation: float 2.5s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(6px); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLL SECTIONS — two-column sticky layout
+   ═══════════════════════════════════════════════════════════ */
+
+.scroll-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  position: relative;
+  border-top: 1px solid rgba(46, 69, 82, 0.08);
+}
+
+/* Text track: scrolls naturally */
+.scroll-text-track {
+  padding: 0 clamp(2rem, 5vw, 5rem);
+}
+
+/* Each step fills near-full viewport height */
+.scroll-step {
+  min-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem 0;
+  opacity: 0.15;
+  transform: translateY(12px);
+  transition: opacity 0.55s ease, transform 0.55s ease;
+}
+
+.scroll-step.is-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.scroll-step:first-child {
+  padding-top: 15vh;
+}
+
+.scroll-step:last-child {
+  padding-bottom: 15vh;
+}
+
+/* Sticky canvas column */
+.scroll-canvas-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.scroll-canvas-sticky canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── Text styling inside steps ── */
+
+.scroll-step h2 {
+  font-size: clamp(1.6rem, 2.8vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.6rem;
+  color: var(--ink);
+}
+
+.scroll-step p {
+  margin-bottom: 0.5rem;
+  max-width: 520px;
+}
+
+.scroll-step p:last-child {
+  margin-bottom: 0;
+}
+
+.scroll-step strong {
+  font-weight: 600;
+}
+
+.scroll-step em {
+  font-style: italic;
+}
+
+.display-math {
+  margin: 0.8rem 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESULTS
+   ═══════════════════════════════════════════════════════════ */
+
+.results-section {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  border-top: 1px solid rgba(46, 69, 82, 0.08);
+}
+
+.results-inner {
+  max-width: 680px;
+  text-align: center;
+}
+
+.results-inner h2 {
+  font-size: clamp(1.5rem, 2.5vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1rem;
+}
+
+.results-inner p {
+  color: var(--cloud);
+  font-size: 1em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+.site-footer {
+  padding: 5rem 2rem 3rem;
+  text-align: center;
+  border-top: 1px solid rgba(46, 69, 82, 0.08);
+}
+
+.citation-box {
+  background: var(--simplex-fill);
+  border: 1px solid var(--box-edge);
+  border-radius: 10px;
+  padding: 1.8rem 2rem;
+  max-width: 560px;
+  margin: 0 auto 2rem;
+  text-align: left;
+  position: relative;
+}
+
+.citation-box h3 {
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cloud);
+  margin-bottom: 0.8rem;
+}
+
+.citation-box pre {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--ink);
+}
+
+.copy-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--box-edge);
+  border-radius: 5px;
+  padding: 0.3rem 0.7rem;
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.copy-btn:hover {
+  background: var(--simplex-fill);
+}
+
+.footer-links {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.footer-links a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9em;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.footer-links a:hover {
+  border-color: var(--ink);
+}
+
+.footer-note {
+  color: var(--cloud);
+  font-size: 0.75em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .scroll-section {
+    grid-template-columns: 1fr;
+  }
+
+  .scroll-canvas-sticky {
+    height: 50vh;
+    position: sticky;
+    top: 0;
+    order: -1; /* canvas on top */
+  }
+
+  .scroll-step {
+    min-height: 60vh;
+  }
+
+  .scroll-text-track {
+    padding: 0 1.5rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KATEX OVERRIDES
+   ═══════════════════════════════════════════════════════════ */
+
+.katex-display {
+  margin: 0.6em 0;
+}
+
+.katex {
+  font-size: 1.25em;
+}
+
+.display-math .katex-display {
+  font-size: 1.15em;
+}

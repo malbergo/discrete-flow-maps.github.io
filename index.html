@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discrete Flow Maps</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  HERO                                                  -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <header class="hero">
+    <div class="hero__inner">
+      <p class="hero__eyebrow">A framework for trajectory compression on the probability simplex</p>
+      <h1 class="hero__title">Discrete Flow Maps</h1>
+      <div class="hero__rule"></div>
+      <p class="hero__abstract">
+        The sequential nature of autoregressive next-token prediction imposes a fundamental speed
+        limit on Large Language Models. While continuous flow models offer a path to parallel generation,
+        they traditionally demand expensive iterative integration. Flow Maps bypass this bottleneck by
+        compressing generative trajectories into single-step mappings. However, standard formulations rely
+        on Euclidean regression losses that are geometrically ill-suited for discrete data. We resolve this
+        conflict with <em>Discrete Flow Maps</em>, a framework that reconciles trajectory compression with
+        the geometry of the probability simplex.
+      </p>
+      <nav class="hero__links">
+        <a href="#" class="hero__link">ArXiv</a>
+        <a href="#" class="hero__link">Code</a>
+        <a href="#" class="hero__link">BibTeX</a>
+      </nav>
+      <div class="hero__scroll-hint">
+        <span>Scroll to explore</span>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION A: The Probability Simplex                    -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="simplex">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>The Probability Simplex</h2>
+        <p>
+          Consider a vocabulary of \(K\) tokens&mdash;for instance, three words:
+          <strong>fox</strong>, <strong>dog</strong>, and <strong>cat</strong>.
+        </p>
+        <p>
+          Each token is represented as a one-hot vector \(e_i \in \mathbb{R}^K\),
+          forming the vertices of the \((K{-}1)\)-dimensional probability simplex
+          \(\Delta^{K-1}\).
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          Any probability distribution over the vocabulary is a point inside
+          the simplex. The closer a point is to a vertex, the higher the
+          probability assigned to that token.
+        </p>
+        <p>
+          The simplex is defined as:
+        </p>
+        <p class="display-math">
+          \[\Delta^{K-1} = \{x \in \mathbb{R}^K : x \geq 0,\; \langle \mathbf{1}, x \rangle = 1\}\]
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-simplex"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION B: Instantaneous Denoiser                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="denoiser-inst">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>The Instantaneous Denoiser</h2>
+        <p>
+          At any time \(s\) along the generative process, given a noisy state
+          \(I_s = x\), we can ask: <em>what is the posterior probability that
+          the clean data is each token?</em>
+        </p>
+        <p>
+          The answer is the <strong style="color: var(--teal)">instantaneous denoiser</strong>
+          \(\psi_{s,s}(x)\)&mdash;a weighted sum of vertices, where the weight
+          on each vertex \(e_i\) is the posterior probability \(p_i = \mathbb{P}(I_1 = e_i \mid I_s = x)\).
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          Since each weight is non-negative and they sum to one, the denoiser
+          is always a valid probability distribution&mdash;it lives on the simplex
+          by construction:
+        </p>
+        <p class="display-math">
+          \[\psi_{s,s}(x) = \sum_{i=1}^{K} \mathbb{P}(I_1 = e_i \mid I_s = x)\, e_i = \mathbb{E}[I_1 \mid I_s = x]\]
+        </p>
+        <p>
+          This is simply the conditional expectation of the clean data
+          given the noisy observation.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-denoiser-inst"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION C: Mean Denoiser                              -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="mean-denoiser">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>The Mean Denoiser</h2>
+        <p>
+          The generative ODE traces a trajectory from random noise \(x_0\)
+          to a data point \(x_1\) (a simplex vertex). Along this trajectory,
+          the instantaneous denoiser \(\psi_{s,s}\) evolves continuously.
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          We mark two points along the trajectory: an earlier time \(x_s\)
+          and a later time \(x_t\). The tangent at \(x_s\) projects onto
+          the simplex at the instantaneous denoiser \(\psi_{s,s}\).
+        </p>
+      </div>
+      <div class="scroll-step" data-step="2">
+        <p>
+          As we integrate along the trajectory from \(s\) to \(t\), we define
+          the <strong style="color: var(--teal)">mean denoiser</strong>
+          \(\psi_{s,t}\)&mdash;a time-weighted average of the instantaneous
+          denoisers along the path:
+        </p>
+        <p class="display-math">
+          \[\psi_{s,t}(x_s) = \int_s^t w(u)\,\mathbb{E}[I_1 \mid I_u = x_u]\, du\]
+        </p>
+        <p>
+          <strong>Key insight:</strong> Since each \(\mathbb{E}[I_1 \mid I_u = x_u]\) is on the simplex,
+          and \(w(u)\) integrates to 1, the mean denoiser \(\psi_{s,t}\) is also
+          always on the simplex. This enables cross-entropy losses for flow map training.
+        </p>
+      </div>
+      <div class="scroll-step" data-step="3">
+        <p>
+          The secant between \(x_s\) and \(x_t\) on the trajectory corresponds
+          to the mean denoiser \(\psi_{s,t}\) on the simplex. The projection
+          from the trajectory onto the simplex is the geometric bridge that
+          connects the flow map to discrete losses.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-mean-denoiser"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION D: Flow Map                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="flow-map">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>The Discrete Flow Map</h2>
+        <p>
+          The flow map \(X_{s,t}\) jumps directly from time \(s\) to time \(t\)
+          along the generative trajectory. We parameterize it as a
+          <strong>convex combination</strong> of the current state and
+          the mean denoiser:
+        </p>
+        <p class="display-math">
+          \[X_{s,t}(x_s) = \frac{1-t}{1-s}\,x_s + \frac{t-s}{1-s}\,\psi_{s,t}(x_s)\]
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          Since \(\psi_{s,t}\) lives on the simplex, the flow map output is a
+          convex combination of \(x_s\) and a point on the simplex.
+          At \(t = 1\), the map yields the full generation:
+          \(X_{s,1}(x_s) = \psi_{s,1}(x_s)\), a point on the simplex.
+        </p>
+        <p>
+          This parameterization is the key to our framework: it replaces
+          unconstrained Euclidean regression with geometrically consistent
+          objectives on the simplex.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-flow-map"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION E: PSD Loss                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="psd">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>Semi-Group Consistency (PSD)</h2>
+        <p>
+          The flow map must satisfy the <strong>semi-group property</strong>:
+          jumping from \(s\) to \(t\) must equal jumping from \(s\) to \(u\),
+          then from \(u\) to \(t\).
+        </p>
+        <p>
+          In terms of the mean denoiser, this becomes a convex decomposition:
+        </p>
+        <p class="display-math">
+          \[\psi_{s,t}(x_s) = \alpha_{s,u,t}\,\psi_{s,u}(x_s) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x_s))\]
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          Since both sides are probability distributions (points on the simplex),
+          we can enforce this identity via <strong>KL divergence</strong> rather
+          than L\(^2\) regression:
+        </p>
+        <p class="display-math">
+          \[\mathcal{L}_{\text{PSD}} = \mathbb{E}\Big[D_{\text{KL}}\big(\text{sg}[\alpha\,\hat\psi_{s,u} + \beta\,\hat\psi_{u,t}(\hat X_{s,u})]\;\|\;\hat\psi_{s,t}\big)\Big]\]
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-psd"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION F: LSD Loss                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="lsd">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>Lagrangian Consistency (LSD)</h2>
+        <p>
+          The <strong>Lagrangian perspective</strong> requires that the flow
+          endpoint velocity matches the instantaneous drift. In terms of the
+          mean denoiser:
+        </p>
+        <p class="display-math">
+          \[\psi_{s,t}(x_s) = \psi_{t,t}(x_t) - C_{s,t}\,\frac{\partial}{\partial t}\psi_{s,t}(x_s)\]
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          To obtain a valid target distribution, we derive an equivalent
+          condition in <em>logit space</em>:
+        </p>
+        <p class="display-math">
+          \[\psi_{s,t} = \text{Softmax}\!\big(z_{t,t}(x_t) - \log(\mathbf{1} + C_{s,t}(\dot z_{s,t} - \bar{\dot z}_{s,t}\mathbf{1}))\big)\]
+        </p>
+        <p>
+          This logit-space formulation always yields a valid probability distribution,
+          enabling KL divergence training.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-lsd"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION G: ESD Loss                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="esd">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>Eulerian Consistency (ESD)</h2>
+        <p>
+          The <strong>Eulerian perspective</strong> enforces that the flow map
+          is invariant to the source time&mdash;if you re-parameterize where you
+          start, the endpoint should not change:
+        </p>
+        <p class="display-math">
+          \[\frac{\partial}{\partial s}\psi_{s,t}(x) + J_x\psi_{s,t}(x)\,b_s(x) = \kappa_{s,t}\big(\psi_{s,t}(x) - \psi_{s,s}(x)\big)\]
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          Again, we derive an equivalent logit-space condition:
+        </p>
+        <p class="display-math">
+          \[\psi_{s,t} = \text{Softmax}\!\big(z_{s,s}(x) - \log(\mathbf{1} - \kappa_{s,t}^{-1}(D_s z_{s,t} - \overline{D_s z_{s,t}}\,\mathbf{1}))\big)\]
+        </p>
+        <p>
+          All three consistency losses&mdash;PSD, LSD, and ESD&mdash;are
+          exact objectives derived directly from the geometric definitions of the flow,
+          with no approximations.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-esd"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  SECTION H: dPSD Loss                                  -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="dpsd">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>Differential Semi-Group (dPSD)</h2>
+        <p>
+          Taking the derivative of the semi-group condition with respect to
+          the intermediate time \(u\) yields a fourth identity:
+        </p>
+        <p class="display-math">
+          \[\frac{d}{du}\big[\alpha_{s,u,t}\,\psi_{s,u}(x) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x))\big] = 0\]
+        </p>
+        <p>
+          Setting \(u = s\) recovers ESD; setting \(u = t\) recovers LSD.
+          This unifies all three consistency rules as special cases of one
+          differential identity.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-dpsd"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  PARALLEL GENERATION                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="parallel">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>Parallel Generation</h2>
+        <p>
+          Unlike autoregressive models that generate one token at a time,
+          discrete flow maps operate on all \(L\) token positions simultaneously.
+        </p>
+        <p>
+          Each position has its own simplex. The flow map transports noise
+          to data across all positions in parallel, enabling generation of
+          an entire sequence in a single forward pass.
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          The flows from Gaussian noise converge to simplex vertices&mdash;each
+          vertex representing a token in the vocabulary. The full sequence
+          emerges simultaneously rather than sequentially.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-parallel"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  FINE-TUNING / STEERING                                -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="scroll-section" data-section="steering">
+    <div class="scroll-text-track">
+      <div class="scroll-step" data-step="0">
+        <h2>Reward Fine-Tuning</h2>
+        <p>
+          A pre-trained discrete flow map may not satisfy downstream
+          objectives out of the box. For instance, a base model
+          might produce an incorrect arithmetic result.
+        </p>
+        <p>
+          The base (green) dynamics land on tokens that form a
+          plausible but wrong answer.
+        </p>
+      </div>
+      <div class="scroll-step" data-step="1">
+        <p>
+          Fine-tuning <em>steers</em> the flow map dynamics toward
+          a reward signal. The adapted (red) trajectories are
+          nudged so that the landing tokens produce the correct answer.
+        </p>
+        <p>
+          Because each position is independent, steering respects
+          the parallel structure&mdash;all positions are corrected
+          simultaneously.
+        </p>
+      </div>
+    </div>
+    <div class="scroll-canvas-sticky">
+      <canvas id="canvas-steering"></canvas>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  RESULTS                                               -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="results-section">
+    <div class="results-inner">
+      <h2>Experiments</h2>
+      <p>
+        We validate that respecting the geometry of the simplex allows us to
+        surpass previous state-of-the-art results in discrete flow modeling.
+        Results coming soon.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  FOOTER                                                -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <div class="citation-box">
+      <h3>Citation</h3>
+      <pre><code>@article{discreteflowmaps2026,
+  title   = {Discrete Flow Maps},
+  year    = {2026},
+}</code></pre>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent)">Copy</button>
+    </div>
+    <div class="footer-links">
+      <a href="#">ArXiv</a>
+      <a href="#">GitHub</a>
+    </div>
+    <p class="footer-note">Built with vanilla HTML, CSS, and Canvas.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
