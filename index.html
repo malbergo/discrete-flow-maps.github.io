@@ -42,295 +42,308 @@
   </header>
 
   <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION A: The Probability Simplex                    -->
+  <!--  SIMPLEX GROUP: shared sticky canvas for all theory    -->
   <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="simplex">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>The Probability Simplex</h2>
-        <p>
-          Consider a vocabulary of \(K\) tokens&mdash;for instance, three words:
-          <strong>fox</strong>, <strong>dog</strong>, and <strong>cat</strong>.
-        </p>
-        <p>
-          Each token is represented as a one-hot vector \(e_i \in \mathbb{R}^K\),
-          forming the vertices of the \((K{-}1)\)-dimensional probability simplex
-          \(\Delta^{K-1}\).
-        </p>
-      </div>
-      <div class="scroll-step" data-step="1">
-        <p>
-          Any probability distribution over the vocabulary is a point inside
-          the simplex. The closer a point is to a vertex, the higher the
-          probability assigned to that token.
-        </p>
-        <p>
-          The simplex is defined as:
-        </p>
-        <p class="display-math">
-          \[\Delta^{K-1} = \{x \in \mathbb{R}^K : x \geq 0,\; \langle \mathbf{1}, x \rangle = 1\}\]
-        </p>
-      </div>
-    </div>
-    <div class="scroll-canvas-sticky">
-      <canvas id="canvas-simplex"></canvas>
-    </div>
-  </section>
+  <div class="simplex-group">
+    <div class="simplex-text-column">
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION B: Instantaneous Denoiser                     -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="denoiser-inst">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>The Instantaneous Denoiser</h2>
-        <p>
-          At any time \(s\) along the generative process, given a noisy state
-          \(I_s = x\), we can ask: <em>what is the posterior probability that
-          the clean data is each token?</em>
-        </p>
-        <p>
-          The answer is the <strong style="color: var(--teal)">instantaneous denoiser</strong>
-          \(\psi_{s,s}(x)\)&mdash;a weighted sum of vertices, where the weight
-          on each vertex \(e_i\) is the posterior probability \(p_i = \mathbb{P}(I_1 = e_i \mid I_s = x)\).
-        </p>
+      <!-- A: The Probability Simplex -->
+      <div class="text-section" data-section="simplex">
+        <div class="scroll-step" data-step="0">
+          <h2>The Probability Simplex</h2>
+          <p>
+            Consider a vocabulary of \(K\) tokens&mdash;for instance, three words:
+            <strong>fox</strong>, <strong>dog</strong>, and <strong>cat</strong>.
+          </p>
+          <p>
+            Each token is represented as a one-hot vector \(e_i \in \mathbb{R}^K\),
+            forming the vertices of the \((K{-}1)\)-dimensional probability simplex
+            \(\Delta^{K-1}\).
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            Any probability distribution over the vocabulary is a point inside
+            the simplex. The closer a point is to a vertex, the higher the
+            probability assigned to that token.
+          </p>
+          <p>
+            The simplex is defined as:
+          </p>
+          <p class="display-math">
+            \[\Delta^{K-1} = \{x \in \mathbb{R}^K : x \geq 0,\; \langle \mathbf{1}, x \rangle = 1\}\]
+          </p>
+        </div>
       </div>
-      <div class="scroll-step" data-step="1">
-        <p>
-          Since each weight is non-negative and they sum to one, the denoiser
-          is always a valid probability distribution&mdash;it lives on the simplex
-          by construction:
-        </p>
-        <p class="display-math">
-          \[\psi_{s,s}(x) = \sum_{i=1}^{K} \mathbb{P}(I_1 = e_i \mid I_s = x)\, e_i = \mathbb{E}[I_1 \mid I_s = x]\]
-        </p>
-        <p>
-          This is simply the conditional expectation of the clean data
-          given the noisy observation.
-        </p>
-      </div>
-    </div>
-    <div class="scroll-canvas-sticky">
-      <canvas id="canvas-denoiser-inst"></canvas>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION C: Mean Denoiser                              -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="mean-denoiser">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>The Mean Denoiser</h2>
-        <p>
-          The generative ODE traces a trajectory from random noise \(x_0\)
-          to a data point \(x_1\) (a simplex vertex). Along this trajectory,
-          the instantaneous denoiser \(\psi_{s,s}\) evolves continuously.
-        </p>
+      <!-- B: Stochastic Interpolant -->
+      <div class="text-section" data-section="interpolant">
+        <div class="scroll-step" data-step="0">
+          <h2>The Stochastic Interpolant</h2>
+          <p>
+            To generate discrete data we need a process that transports a
+            continuous base distribution \(\rho_0\) in \(\mathbb{R}^K\) to the discrete
+            target \(\rho_1\) supported on the simplex vertices.
+          </p>
+          <p>
+            Let \(x_0 \sim \rho_0\) be a base sample and
+            \(x_1 \in \{e_1, \dots, e_K\}\) a data token drawn from \(\rho_1\).
+            The <strong>stochastic interpolant</strong> linearly blends the two:
+          </p>
+          <p class="display-math">
+            \[I_t = (1 - t)\, x_0 + t\, x_1, \qquad t \in [0, 1]\]
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            Each base&ndash;data pair \((x_0, x_1)\) traces a straight line
+            from the base distribution toward a simplex vertex. The interpolant
+            \(I_t\) slides along this line as \(t\) increases.
+            At \(t{=}0\) we recover the base; at \(t{=}1\) we arrive
+            at a one-hot vertex. At any intermediate time the population of
+            \(I_t\) points forms a cloud that smoothly evolves from continuous to discrete.
+          </p>
+        </div>
+        <div class="scroll-step" data-step="2">
+          <h3>The Velocity Field</h3>
+          <p>
+            Each interpolant has slope \(\dot{I}_t = x_1 - x_0\).
+            Pick a point \(x_s\) and look at all the interpolants
+            passing through it at time \(s\).
+            The velocity field \(b_s(x) = \mathbb{E}[\dot{I}_s \mid I_s = x]\)
+            is the <strong>conditional average</strong> of these slopes.
+          </p>
+          <p>
+            The slopes at \(x_s\) each point toward their target vertex.
+            Their <strong style="color: var(--gold)">conditional average</strong>
+            points directly toward \(\psi_{s,s}\)&mdash;the
+            <em>instantaneous denoiser</em>&mdash;with weights given by the posterior
+            \(p_i = \mathbb{P}(x_1 = e_i \mid I_s = x_s)\).
+          </p>
+        </div>
       </div>
-      <div class="scroll-step" data-step="1">
-        <p>
-          We mark two points along the trajectory: an earlier time \(x_s\)
-          and a later time \(x_t\). The tangent at \(x_s\) projects onto
-          the simplex at the instantaneous denoiser \(\psi_{s,s}\).
-        </p>
-      </div>
-      <div class="scroll-step" data-step="2">
-        <p>
-          As we integrate along the trajectory from \(s\) to \(t\), we define
-          the <strong style="color: var(--teal)">mean denoiser</strong>
-          \(\psi_{s,t}\)&mdash;a time-weighted average of the instantaneous
-          denoisers along the path:
-        </p>
-        <p class="display-math">
-          \[\psi_{s,t}(x_s) = \int_s^t w(u)\,\mathbb{E}[I_1 \mid I_u = x_u]\, du\]
-        </p>
-        <p>
-          <strong>Key insight:</strong> Since each \(\mathbb{E}[I_1 \mid I_u = x_u]\) is on the simplex,
-          and \(w(u)\) integrates to 1, the mean denoiser \(\psi_{s,t}\) is also
-          always on the simplex. This enables cross-entropy losses for flow map training.
-        </p>
-      </div>
-      <div class="scroll-step" data-step="3">
-        <p>
-          The secant between \(x_s\) and \(x_t\) on the trajectory corresponds
-          to the mean denoiser \(\psi_{s,t}\) on the simplex. The projection
-          from the trajectory onto the simplex is the geometric bridge that
-          connects the flow map to discrete losses.
-        </p>
-      </div>
-    </div>
-    <div class="scroll-canvas-sticky">
-      <canvas id="canvas-mean-denoiser"></canvas>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION D: Flow Map                                   -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="flow-map">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>The Discrete Flow Map</h2>
-        <p>
-          The flow map \(X_{s,t}\) jumps directly from time \(s\) to time \(t\)
-          along the generative trajectory. We parameterize it as a
-          <strong>convex combination</strong> of the current state and
-          the mean denoiser:
-        </p>
-        <p class="display-math">
-          \[X_{s,t}(x_s) = \frac{1-t}{1-s}\,x_s + \frac{t-s}{1-s}\,\psi_{s,t}(x_s)\]
-        </p>
+      <!-- C: Instantaneous Denoiser -->
+      <div class="text-section" data-section="denoiser-inst">
+        <div class="scroll-step" data-step="0">
+          <h2>The Instantaneous Denoiser</h2>
+          <p>
+            We saw that the velocity field at \(x_s\) points toward
+            \(\psi_{s,s}\). This is the <strong style="color: var(--teal)">instantaneous
+            denoiser</strong>&mdash;the conditional expectation of the clean data:
+          </p>
+          <p class="display-math">
+            \[\psi_{s,s}(x) = \mathbb{E}[x_1 \mid I_s = x]\]
+          </p>
+          <p>
+            The weight on each vertex \(e_i\) is the posterior
+            \(p_i = \mathbb{P}(x_1 = e_i \mid I_s = x)\), exactly the
+            proportion of interpolants through \(x\) that target vertex \(i\).
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            Since each weight is non-negative and they sum to one, the denoiser
+            is always a valid probability distribution&mdash;it lives on the simplex
+            by construction:
+          </p>
+          <p class="display-math">
+            \[\psi_{s,s}(x) = \sum_{i=1}^{K} \mathbb{P}(I_1 = e_i \mid I_s = x)\, e_i = \mathbb{E}[I_1 \mid I_s = x]\]
+          </p>
+          <p>
+            This is simply the conditional expectation of the clean data
+            given the noisy observation.
+          </p>
+        </div>
       </div>
-      <div class="scroll-step" data-step="1">
-        <p>
-          Since \(\psi_{s,t}\) lives on the simplex, the flow map output is a
-          convex combination of \(x_s\) and a point on the simplex.
-          At \(t = 1\), the map yields the full generation:
-          \(X_{s,1}(x_s) = \psi_{s,1}(x_s)\), a point on the simplex.
-        </p>
-        <p>
-          This parameterization is the key to our framework: it replaces
-          unconstrained Euclidean regression with geometrically consistent
-          objectives on the simplex.
-        </p>
-      </div>
-    </div>
-    <div class="scroll-canvas-sticky">
-      <canvas id="canvas-flow-map"></canvas>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION E: PSD Loss                                   -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="psd">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>Semi-Group Consistency (PSD)</h2>
-        <p>
-          The flow map must satisfy the <strong>semi-group property</strong>:
-          jumping from \(s\) to \(t\) must equal jumping from \(s\) to \(u\),
-          then from \(u\) to \(t\).
-        </p>
-        <p>
-          In terms of the mean denoiser, this becomes a convex decomposition:
-        </p>
-        <p class="display-math">
-          \[\psi_{s,t}(x_s) = \alpha_{s,u,t}\,\psi_{s,u}(x_s) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x_s))\]
-        </p>
+      <!-- D: Mean Denoiser -->
+      <div class="text-section" data-section="mean-denoiser">
+        <div class="scroll-step" data-step="0">
+          <h2>The Mean Denoiser</h2>
+          <p>
+            The generative ODE traces a trajectory from random noise \(x_0\)
+            to a data point \(x_1\) (a simplex vertex).
+            We mark two points along the trajectory: an earlier time \(x_s\)
+            and a later time \(x_t\). The tangent at \(x_s\) projects onto
+            the simplex at the instantaneous denoiser \(\psi_{s,s}\).
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            As we integrate along the trajectory from \(s\) to \(t\), we define
+            the <strong style="color: var(--teal)">mean denoiser</strong>
+            \(\psi_{s,t}\)&mdash;a time-weighted average of the instantaneous
+            denoisers along the path:
+          </p>
+          <p class="display-math">
+            \[\psi_{s,t}(x_s) = \int_s^t w(u)\,\mathbb{E}[I_1 \mid I_u = x_u]\, du\]
+          </p>
+          <p>
+            <strong>Key insight:</strong> Since each \(\mathbb{E}[I_1 \mid I_u = x_u]\) is on the simplex,
+            and \(w(u)\) integrates to 1, the mean denoiser \(\psi_{s,t}\) is also
+            always on the simplex. This enables cross-entropy losses for flow map training.
+          </p>
+        </div>
+        <div class="scroll-step" data-step="2">
+          <p>
+            The secant between \(x_s\) and \(x_t\) on the trajectory corresponds
+            to the mean denoiser \(\psi_{s,t}\) on the simplex. The projection
+            from the trajectory onto the simplex is the geometric bridge that
+            connects the flow map to discrete losses.
+          </p>
+        </div>
       </div>
-      <div class="scroll-step" data-step="1">
-        <p>
-          Since both sides are probability distributions (points on the simplex),
-          we can enforce this identity via <strong>KL divergence</strong> rather
-          than L\(^2\) regression:
-        </p>
-        <p class="display-math">
-          \[\mathcal{L}_{\text{PSD}} = \mathbb{E}\Big[D_{\text{KL}}\big(\text{sg}[\alpha\,\hat\psi_{s,u} + \beta\,\hat\psi_{u,t}(\hat X_{s,u})]\;\|\;\hat\psi_{s,t}\big)\Big]\]
-        </p>
-      </div>
-    </div>
-    <div class="scroll-canvas-sticky">
-      <canvas id="canvas-psd"></canvas>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION F: LSD Loss                                   -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="lsd">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>Lagrangian Consistency (LSD)</h2>
-        <p>
-          The <strong>Lagrangian perspective</strong> requires that the flow
-          endpoint velocity matches the instantaneous drift. In terms of the
-          mean denoiser:
-        </p>
-        <p class="display-math">
-          \[\psi_{s,t}(x_s) = \psi_{t,t}(x_t) - C_{s,t}\,\frac{\partial}{\partial t}\psi_{s,t}(x_s)\]
-        </p>
+      <!-- E: Flow Map -->
+      <div class="text-section" data-section="flow-map">
+        <div class="scroll-step" data-step="0">
+          <h2>The Discrete Flow Map</h2>
+          <p>
+            The flow map \(X_{s,t}\) jumps directly from time \(s\) to time \(t\)
+            along the generative trajectory. We parameterize it as a
+            <strong>convex combination</strong> of the current state and
+            the mean denoiser:
+          </p>
+          <p class="display-math">
+            \[X_{s,t}(x_s) = \frac{1-t}{1-s}\,x_s + \frac{t-s}{1-s}\,\psi_{s,t}(x_s)\]
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            Since \(\psi_{s,t}\) lives on the simplex, the flow map output is a
+            convex combination of \(x_s\) and a point on the simplex.
+            At \(t = 1\), the map yields the full generation:
+            \(X_{s,1}(x_s) = \psi_{s,1}(x_s)\), a point on the simplex.
+          </p>
+          <p>
+            This parameterization is the key to our framework: it replaces
+            unconstrained Euclidean regression with geometrically consistent
+            objectives on the simplex.
+          </p>
+        </div>
+        <div class="scroll-step" data-step="2">
+          <p>
+            As \(x_t\) evolves along the trajectory, the denoiser
+            \(\psi_{s,t}\) tracks it like a <em>shadow</em> cast onto
+            the simplex&mdash;always inside the triangle.
+          </p>
+          <p>
+            The flow map lives outside; its shadow lives on the simplex.
+            Training the denoiser is training the shadow.
+          </p>
+        </div>
       </div>
-      <div class="scroll-step" data-step="1">
-        <p>
-          To obtain a valid target distribution, we derive an equivalent
-          condition in <em>logit space</em>:
-        </p>
-        <p class="display-math">
-          \[\psi_{s,t} = \text{Softmax}\!\big(z_{t,t}(x_t) - \log(\mathbf{1} + C_{s,t}(\dot z_{s,t} - \bar{\dot z}_{s,t}\mathbf{1}))\big)\]
-        </p>
-        <p>
-          This logit-space formulation always yields a valid probability distribution,
-          enabling KL divergence training.
-        </p>
-      </div>
-    </div>
-    <div class="scroll-canvas-sticky">
-      <canvas id="canvas-lsd"></canvas>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION G: ESD Loss                                   -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="esd">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>Eulerian Consistency (ESD)</h2>
-        <p>
-          The <strong>Eulerian perspective</strong> enforces that the flow map
-          is invariant to the source time&mdash;if you re-parameterize where you
-          start, the endpoint should not change:
-        </p>
-        <p class="display-math">
-          \[\frac{\partial}{\partial s}\psi_{s,t}(x) + J_x\psi_{s,t}(x)\,b_s(x) = \kappa_{s,t}\big(\psi_{s,t}(x) - \psi_{s,s}(x)\big)\]
-        </p>
+      <!-- F: PSD Loss -->
+      <div class="text-section" data-section="psd">
+        <div class="scroll-step" data-step="0">
+          <h2>Semi-Group Consistency (PSD)</h2>
+          <p>
+            The flow map must satisfy the <strong>semi-group property</strong>:
+            jumping from \(s\) to \(t\) must equal jumping from \(s\) to \(u\),
+            then from \(u\) to \(t\).
+          </p>
+          <p>
+            In terms of the mean denoiser, this becomes a convex decomposition:
+          </p>
+          <p class="display-math">
+            \[\psi_{s,t}(x_s) = \alpha_{s,u,t}\,\psi_{s,u}(x_s) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x_s))\]
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            Since both sides are probability distributions (points on the simplex),
+            we can enforce this identity via <strong>KL divergence</strong> rather
+            than L\(^2\) regression:
+          </p>
+          <p class="display-math">
+            \[\mathcal{L}_{\text{PSD}} = \mathbb{E}\Big[D_{\text{KL}}\big(\text{sg}[\alpha\,\hat\psi_{s,u} + \beta\,\hat\psi_{u,t}(\hat X_{s,u})]\;\|\;\hat\psi_{s,t}\big)\Big]\]
+          </p>
+        </div>
       </div>
-      <div class="scroll-step" data-step="1">
-        <p>
-          Again, we derive an equivalent logit-space condition:
-        </p>
-        <p class="display-math">
-          \[\psi_{s,t} = \text{Softmax}\!\big(z_{s,s}(x) - \log(\mathbf{1} - \kappa_{s,t}^{-1}(D_s z_{s,t} - \overline{D_s z_{s,t}}\,\mathbf{1}))\big)\]
-        </p>
-        <p>
-          All three consistency losses&mdash;PSD, LSD, and ESD&mdash;are
-          exact objectives derived directly from the geometric definitions of the flow,
-          with no approximations.
-        </p>
-      </div>
-    </div>
-    <div class="scroll-canvas-sticky">
-      <canvas id="canvas-esd"></canvas>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!--  SECTION H: dPSD Loss                                  -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <section class="scroll-section" data-section="dpsd">
-    <div class="scroll-text-track">
-      <div class="scroll-step" data-step="0">
-        <h2>Differential Semi-Group (dPSD)</h2>
-        <p>
-          Taking the derivative of the semi-group condition with respect to
-          the intermediate time \(u\) yields a fourth identity:
-        </p>
-        <p class="display-math">
-          \[\frac{d}{du}\big[\alpha_{s,u,t}\,\psi_{s,u}(x) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x))\big] = 0\]
-        </p>
-        <p>
-          Setting \(u = s\) recovers ESD; setting \(u = t\) recovers LSD.
-          This unifies all three consistency rules as special cases of one
-          differential identity.
-        </p>
+      <!-- G: LSD Loss -->
+      <div class="text-section" data-section="lsd">
+        <div class="scroll-step" data-step="0">
+          <h2>Lagrangian Consistency (LSD)</h2>
+          <p>
+            The <strong>Lagrangian perspective</strong> requires that the flow
+            endpoint velocity matches the instantaneous drift. In terms of the
+            mean denoiser:
+          </p>
+          <p class="display-math">
+            \[\psi_{s,t}(x_s) = \psi_{t,t}(x_t) - C_{s,t}\,\frac{\partial}{\partial t}\psi_{s,t}(x_s)\]
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            To obtain a valid target distribution, we derive an equivalent
+            condition in <em>logit space</em>:
+          </p>
+          <p class="display-math">
+            \[\psi_{s,t} = \text{Softmax}\!\big(z_{t,t}(x_t) - \log(\mathbf{1} + C_{s,t}(\dot z_{s,t} - \bar{\dot z}_{s,t}\mathbf{1}))\big)\]
+          </p>
+          <p>
+            This logit-space formulation always yields a valid probability distribution,
+            enabling KL divergence training.
+          </p>
+        </div>
       </div>
-    </div>
+
+      <!-- H: ESD Loss -->
+      <div class="text-section" data-section="esd">
+        <div class="scroll-step" data-step="0">
+          <h2>Eulerian Consistency (ESD)</h2>
+          <p>
+            The <strong>Eulerian perspective</strong> enforces that the flow map
+            is invariant to the source time&mdash;if you re-parameterize where you
+            start, the endpoint should not change:
+          </p>
+          <p class="display-math">
+            \[\frac{\partial}{\partial s}\psi_{s,t}(x) + J_x\psi_{s,t}(x)\,b_s(x) = \kappa_{s,t}\big(\psi_{s,t}(x) - \psi_{s,s}(x)\big)\]
+          </p>
+        </div>
+        <div class="scroll-step" data-step="1">
+          <p>
+            Again, we derive an equivalent logit-space condition:
+          </p>
+          <p class="display-math">
+            \[\psi_{s,t} = \text{Softmax}\!\big(z_{s,s}(x) - \log(\mathbf{1} - \kappa_{s,t}^{-1}(D_s z_{s,t} - \overline{D_s z_{s,t}}\,\mathbf{1}))\big)\]
+          </p>
+          <p>
+            All three consistency losses&mdash;PSD, LSD, and ESD&mdash;are
+            exact objectives derived directly from the geometric definitions of the flow,
+            with no approximations.
+          </p>
+        </div>
+      </div>
+
+      <!-- I: dPSD Loss -->
+      <div class="text-section" data-section="dpsd">
+        <div class="scroll-step" data-step="0">
+          <h2>Differential Semi-Group (dPSD)</h2>
+          <p>
+            Taking the derivative of the semi-group condition with respect to
+            the intermediate time \(u\) yields a fourth identity:
+          </p>
+          <p class="display-math">
+            \[\frac{d}{du}\big[\alpha_{s,u,t}\,\psi_{s,u}(x) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x))\big] = 0\]
+          </p>
+          <p>
+            Setting \(u = s\) recovers ESD; setting \(u = t\) recovers LSD.
+            This unifies all three consistency rules as special cases of one
+            differential identity.
+          </p>
+        </div>
+      </div>
+
+    </div><!-- /.simplex-text-column -->
+
     <div class="scroll-canvas-sticky">
-      <canvas id="canvas-dpsd"></canvas>
+      <canvas id="canvas-simplex-shared"></canvas>
     </div>
-  </section>
+  </div><!-- /.simplex-group -->
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  PARALLEL GENERATION                                   -->

@@ -514,12 +514,12 @@ class Anim {
 
 // ─── A: The Simplex ───
 class SectionSimplex {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); }
+  resize() { this._trajPts = null; }
 
   draw(dt) {
     this.a.tick(dt);
@@ -548,14 +548,258 @@ class SectionSimplex {
   }
 }
 
-// ─── B: Instantaneous Denoiser ψ_{s,s} ───
+// ─── B: Stochastic Interpolant ───
+class SectionInterpolant {
+  constructor(renderer) {
+    this.r = renderer;
+    this.a = new Anim();
+    this._generatePairs();
+  }
+
+  _generatePairs() {
+    // Generate noise–vertex pairs with proportions matching P_FOX, P_DOG, P_CAT
+    // 6 fox (0.33), 3 dog (0.17), 9 cat (0.50) ≈ (0.32, 0.14, 0.54)
+    const targets = [
+      0,0,0,0,0,0,  // 6 fox
+      1,1,1,          // 3 dog
+      2,2,2,2,2,2,2,2,2, // 9 cat
+    ];
+    this.pairs = [];
+    for (let i = 0; i < targets.length; i++) {
+      // Gaussian-ish scatter from center, seeded by index
+      const ang = (i / targets.length) * Math.PI * 2 + 0.7;
+      const rad = 0.3 + ((i * 13 + 5) % 17) / 17 * 0.45;
+      const nx = Math.cos(ang) * rad * 0.42;
+      const ny = Math.sin(ang) * rad * 0.28 + 0.05;
+      this.pairs.push({ nx, ny, target: targets[i] });
+    }
+  }
+
+  setStep(s) { this.a.setStep(s); }
+  resize() { }
+
+  // Center of the base Gaussian blob
+  _blobCenter() {
+    const r = this.r;
+    return [r.cx, r.vFox[1] + r.scale * 1.5];
+  }
+
+  _noisePos(pair) {
+    const [bcx, bcy] = this._blobCenter();
+    const spread = this.r.scale * 1.6;
+    return [
+      bcx + pair.nx * spread,
+      bcy + pair.ny * spread,
+    ];
+  }
+
+  _vertexPos(target) {
+    const r = this.r;
+    return target === 0 ? r.vFox : target === 1 ? r.vDog : r.vCat;
+  }
+
+  _drawGaussianHeatmap(opacity) {
+    // Draw a soft radial Gaussian blob below the simplex
+    const r = this.r;
+    const ctx = r.ctx;
+    const [bcx, bcy] = this._blobCenter();
+    const radius = r.scale * 1.1;
+
+    ctx.save();
+    const grad = ctx.createRadialGradient(bcx, bcy, 0, bcx, bcy, radius);
+    grad.addColorStop(0, 'rgba(144, 160, 170, ' + (0.2 * opacity) + ')');
+    grad.addColorStop(0.4, 'rgba(144, 160, 170, ' + (0.12 * opacity) + ')');
+    grad.addColorStop(0.7, 'rgba(144, 160, 170, ' + (0.04 * opacity) + ')');
+    grad.addColorStop(1, 'rgba(144, 160, 170, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(bcx, bcy, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  draw(dt) {
+    this.a.tick(dt);
+    const r = this.r, a = this.a;
+    r.clear();
+
+    const vertColors = [C.green1, C.green2, C.green3];
+
+    // Always draw simplex
+    const t0 = a.e(0);
+    if (t0 <= 0) return;
+
+    r.drawTriangle(t0);
+    r.drawVertices(t0);
+    r.drawVertexLabels(t0);
+
+    // Fade factor: dim the general cloud/lines when velocity field step is active
+    const t2pre = a.p(2); // raw progress (not eased) for smooth fade
+    const cloudFade = 1 - t2pre;
+
+    // Gaussian heatmap below the triangle (base distribution)
+    this._drawGaussianHeatmap(t0 * cloudFade);
+
+    // Step 0: base cloud appears
+    for (const pair of this.pairs) {
+      const np = this._noisePos(pair);
+      r.dot(np, C.cloud, 3.5, t0 * 0.5 * cloudFade);
+    }
+
+    // ρ₀ label near the base cloud
+    const [bcx, bcy] = this._blobCenter();
+    r.mathLabel('ρ₀', [bcx + r.scale * 0.9, bcy + r.scale * 0.35],
+      { color: C.cloud, size: 18, opacity: t0 * 0.7 * cloudFade });
+
+    // ρ₁ label near top vertex
+    r.mathLabel('ρ₁', [r.vDog[0] + r.scale * 0.35, r.vDog[1] - r.scale * 0.1],
+      { color: C.green2, size: 18, opacity: t0 * 0.7 * cloudFade });
+
+    // Step 1: interpolation lines, sliding I_t dots, and aggregate cloud
+    const t1 = a.e(1);
+    if (t1 > 0 && cloudFade > 0) {
+      const tParam = 0.5 + 0.35 * Math.sin(performance.now() / 3000);
+
+      for (let i = 0; i < this.pairs.length; i++) {
+        const pair = this.pairs[i];
+        const np = this._noisePos(pair);
+        const vp = this._vertexPos(pair.target);
+
+        // Faint line from x_0 to x_1
+        const ctx2 = r.ctx;
+        ctx2.save();
+        ctx2.globalAlpha = t1 * 0.12 * cloudFade;
+        ctx2.beginPath();
+        ctx2.moveTo(...np);
+        ctx2.lineTo(...vp);
+        ctx2.strokeStyle = C.cloud;
+        ctx2.lineWidth = 1.2;
+        ctx2.stroke();
+        ctx2.restore();
+
+        // I_t dot sliding along the line
+        const it = lerp2(np, vp, tParam);
+        r.dot(it, C.ink, 5, t1 * 0.2 * cloudFade);
+        r.dot(it, C.ink, 3, t1 * 0.7 * cloudFade);
+      }
+
+      // Label for I_t near a representative point
+      const repPair = this.pairs[2];
+      const repNp = this._noisePos(repPair);
+      const repVp = this._vertexPos(repPair.target);
+      const repIt = lerp2(repNp, repVp, tParam);
+      r.mathLabel('I_t', [repIt[0] + 14, repIt[1] - 10],
+        { color: C.gold, size: 17, opacity: t1 * cloudFade });
+    }
+
+    // ── Step 2: velocity field at x_s + conditional average → ψ_{s,s} ──
+    const t2 = a.e(2);
+    if (t2 > 0) {
+      const xs = r.trajectoryPoint(MEAN_XS_PARAM);
+      const s = MEAN_XS_PARAM;
+      const psiSS = r.bary(P_FOX, P_DOG, P_CAT);
+      const vertices = [r.vFox, r.vDog, r.vCat];
+
+      // Generate interpolant lines through x_s
+      const lineCounts = [6, 3, 9];
+      const allLines = [];
+
+      for (let vi = 0; vi < 3; vi++) {
+        const v = vertices[vi];
+        const x0base = [
+          (xs[0] - s * v[0]) / (1 - s),
+          (xs[1] - s * v[1]) / (1 - s),
+        ];
+        for (let j = 0; j < lineCounts[vi]; j++) {
+          const jAng = ((vi * 7 + j * 3 + 1) % 13) / 13 * Math.PI * 2;
+          const jR = r.scale * 0.04 * ((j % 3) + 1);
+          const x0 = [x0base[0] + Math.cos(jAng) * jR,
+                       x0base[1] + Math.sin(jAng) * jR];
+          allLines.push({ x0, v, target: vi, jitterIdx: j });
+        }
+      }
+
+      // Draw the interpolant lines through x_s
+      for (const ln of allLines) {
+        const vc = vertColors[ln.target];
+        const ctx2 = r.ctx;
+        ctx2.save();
+        ctx2.globalAlpha = t2 * 0.18;
+        ctx2.beginPath();
+        ctx2.moveTo(...ln.x0);
+        ctx2.lineTo(...ln.v);
+        ctx2.strokeStyle = vc;
+        ctx2.lineWidth = 1.5;
+        ctx2.stroke();
+        ctx2.restore();
+        r.dot(ln.x0, C.cloud, 2.5, t2 * 0.3);
+      }
+
+      // x_s dot (prominent)
+      r.dot(xs, C.maroon, 6, t2);
+      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4],
+        { color: C.maroon, size: 17, opacity: t2 });
+
+      // Velocity arrows at x_s
+      const arrowLen = r.scale * 0.45;
+      for (const ln of allLines) {
+        const dx = ln.v[0] - ln.x0[0], dy = ln.v[1] - ln.x0[1];
+        const d = Math.hypot(dx, dy);
+        if (d < 1e-6) continue;
+        const end = [xs[0] + (dx / d) * arrowLen, xs[1] + (dy / d) * arrowLen];
+        const vc = vertColors[ln.target];
+        const ctx2 = r.ctx;
+        ctx2.save();
+        ctx2.globalAlpha = t2 * 0.25;
+        ctx2.beginPath();
+        ctx2.moveTo(...xs);
+        ctx2.lineTo(...end);
+        ctx2.strokeStyle = vc;
+        ctx2.lineWidth = 1.5;
+        ctx2.lineCap = 'round';
+        ctx2.stroke();
+        const angle = Math.atan2(dy, dx);
+        const hl = 5;
+        ctx2.beginPath();
+        ctx2.moveTo(end[0], end[1]);
+        ctx2.lineTo(end[0] - hl * Math.cos(angle - 0.4), end[1] - hl * Math.sin(angle - 0.4));
+        ctx2.lineTo(end[0] - hl * Math.cos(angle + 0.4), end[1] - hl * Math.sin(angle + 0.4));
+        ctx2.closePath();
+        ctx2.fillStyle = vc;
+        ctx2.fill();
+        ctx2.restore();
+      }
+
+      // Conditional average → ψ_{s,s} (appears with delay)
+      const avgT = clamp((t2 - 0.35) * 1.6, 0, 1);
+      if (avgT > 0) {
+        const toPsi = [psiSS[0] - xs[0], psiSS[1] - xs[1]];
+        const psiDist = Math.hypot(toPsi[0], toPsi[1]);
+        const arrowEnd = [xs[0] + (toPsi[0] / psiDist) * psiDist * 0.55,
+                          xs[1] + (toPsi[1] / psiDist) * psiDist * 0.55];
+
+        r.arrow(xs, arrowEnd, C.gold, 3, avgT);
+        r.mathLabel('b\u209B(x\u209B)', [arrowEnd[0] + 12, arrowEnd[1] - 8],
+          { color: C.gold, size: 16, opacity: avgT });
+
+        r.dot(psiSS, C.teal, 7 * avgT, avgT);
+        r.mathLabel('\u03C8\u209B,\u209B', [psiSS[0] + 18, psiSS[1] - 14],
+          { color: C.teal, size: 17, opacity: avgT });
+
+        r.dashedLine(arrowEnd, psiSS, C.gold, 1.5, avgT * 0.3);
+      }
+    }
+  }
+}
+
+// ─── C: Instantaneous Denoiser ψ_{s,s} ───
 class SectionDenoiserInst {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); }
+  resize() { }
 
   draw(dt) {
     this.a.tick(dt);
@@ -604,13 +848,13 @@ class SectionDenoiserInst {
 
 // ─── C: Mean Denoiser ψ_{s,t} ───
 class SectionMeanDenoiser {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
     this._trajPts = null;
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); this._trajPts = null; }
+  resize() { this._trajPts = null; }
 
   get trajPts() {
     if (!this._trajPts) this._trajPts = this.r.trajectoryPoints(120);
@@ -644,51 +888,46 @@ class SectionMeanDenoiser {
     // Smooth visual connector on the simplex between ψ_{s,s} and ψ_{s,t}.
     const psiConnectorPts = archedConnectorPoints(psiSS, psiST, 0.14 * r.scale, 84);
 
-    // Step 0: trajectory curve
-    const curveT = a.e(0);
-    if (curveT > 0) {
-      const numPts = Math.floor(curveT * pts.length);
-      r.curve(pts.slice(0, numPts + 1), '#2e4552', 3, curveT);
+    // Step 0: trajectory curve + mark x_s, x_t + tangent → ψ_{s,s}
+    const t0 = a.e(0);
+    if (t0 > 0) {
+      // Phase 1: draw trajectory progressively
+      const curvePhase = clamp(t0 * 2, 0, 1);
+      const numPts = Math.floor(curvePhase * pts.length);
+      r.curve(pts.slice(0, numPts + 1), '#2e4552', 3, Math.min(t0, 1));
 
-      r.dot(x0, C.maroon, 5, curveT);
-      r.mathLabel('x\u2080', [x0[0] + 16, x0[1] + 4], { color: C.maroon, size: 17, opacity: curveT });
+      r.dot(x0, C.maroon, 5, t0);
+      r.mathLabel('x\u2080', [x0[0] + 16, x0[1] + 4], { color: C.maroon, size: 17, opacity: t0 });
+      if (curvePhase > 0.95) {
+        r.mathLabel('x\u2081', [x1[0] - 8, x1[1] + 18], { color: C.maroon, size: 17 });
+      }
 
-      if (curveT > 0.95) {
-        r.mathLabel('x\u2081', [x1[0] - 8, x1[1] + 18], { color: C.maroon, size: 17, opacity: 1 });
+      // Phase 2: mark x_s, x_t, tangent and ψ_{s,s} (appears with delay)
+      const markT = clamp((t0 - 0.4) * 1.8, 0, 1);
+      if (markT > 0) {
+        // Show full trajectory once markings appear
+        r.curve(pts, '#2e4552', 3, 1);
+
+        r.dot(xs, C.maroon, 5, markT);
+        r.dot(xt, C.maroon, 5, markT);
+        r.mathLabel('x\u209B', [xs[0] + 16, xs[1] + 2], { color: C.maroon, size: 17, opacity: markT });
+        r.mathLabel('x\u209C', [xt[0] - 18, xt[1] + 2], { color: C.maroon, size: 17, opacity: markT });
+
+        r.tangentRay(xs, tangentTarget, 0.80 * r.scale, C.teal, 2.5, markT * 0.8);
+
+        const dashEnd = lerp2(xs, psiSS, markT);
+        r.dashedLine(xs, dashEnd, C.teal, 2, markT * 0.7);
+        if (markT > 0.7) {
+          const dp = (markT - 0.7) / 0.3;
+          r.dot(psiSS, C.teal, 6, dp);
+          r.mathLabel('\u03C8\u209B,\u209B', [psiSS[0] + 18, psiSS[1] - 14], { color: C.teal, size: 17, opacity: dp });
+        }
       }
     }
 
-    // Step 1: mark x_s, x_t + tangent at x_s → ψ_{s,s} projection
-    const markT = a.e(1);
-    if (markT > 0) {
-      // Full trajectory
-      r.curve(pts, '#2e4552', 3, 1);
-      r.dot(x0, C.maroon, 5);
-      r.mathLabel('x\u2080', [x0[0] + 16, x0[1] + 4], { color: C.maroon, size: 17 });
-      r.mathLabel('x\u2081', [x1[0] - 8, x1[1] + 18], { color: C.maroon, size: 17 });
-
-      r.dot(xs, C.maroon, 5, markT);
-      r.dot(xt, C.maroon, 5, markT);
-      r.mathLabel('x\u209B', [xs[0] + 16, xs[1] + 2], { color: C.maroon, size: 17, opacity: markT });
-      r.mathLabel('x\u209C', [xt[0] - 18, xt[1] + 2], { color: C.maroon, size: 17, opacity: markT });
-
-      // True cubic tangent at x_s. The curve is tuned so this aligns with ψ_{s,s}.
-      r.tangentRay(xs, tangentTarget, 0.80 * r.scale, C.teal, 2.5, markT * 0.8);
-
-      // Dashed projection from x_s to ψ_{s,s}
-      const dashEnd = lerp2(xs, psiSS, markT);
-      r.dashedLine(xs, dashEnd, C.teal, 2, markT * 0.7);
-      if (markT > 0.7) {
-        const dp = (markT - 0.7) / 0.3;
-        r.dot(psiSS, C.teal, 6, dp);
-        r.mathLabel('\u03C8\u209B,\u209B', [psiSS[0] + 18, psiSS[1] - 14], { color: C.teal, size: 17, opacity: dp });
-      }
-    }
-
-    // Step 2: sweep psi path on simplex from ψ_{s,s} to ψ_{s,t}
-    const sweepT = a.e(2);
+    // Step 1: sweep psi path on simplex from ψ_{s,s} to ψ_{s,t}
+    const sweepT = a.e(1);
     if (sweepT > 0) {
-      // Draw everything from step 1 fully
       r.curve(pts, '#2e4552', 3, 1);
       r.dot(x0, C.maroon, 5); r.dot(xs, C.maroon, 5); r.dot(xt, C.maroon, 5);
       r.mathLabel('x\u2080', [x0[0] + 16, x0[1] + 4], { color: C.maroon, size: 17 });
@@ -701,7 +940,6 @@ class SectionMeanDenoiser {
       r.dot(psiSS, C.teal, 6);
       r.mathLabel('\u03C8\u209B,\u209B', [psiSS[0] + 18, psiSS[1] - 14], { color: C.teal, size: 17 });
 
-      // Exact secant-conditioned ψ sweep on the simplex: ψ_s,u for u ∈ [s, t].
       const connMaxIdx = psiConnectorPts.length - 1;
       const connFloat = sweepT * connMaxIdx;
       const connIdx = Math.floor(connFloat);
@@ -712,11 +950,9 @@ class SectionMeanDenoiser {
       }
       r.curve(connDraw, C.teal, 2.5, 0.6);
 
-      // Moving dot on trajectory (exact point on the cubic).
       const movPos = r.trajectoryPoint(lerp(xsParam, xtParam, sweepT));
       r.dot(movPos, C.maroon, 6, 0.8);
 
-      // Moving ψ dot — enforce the secant condition frame-by-frame.
       const psiCur = sweepT <= 1e-6 ? psiSS : (r.psiFromSecant(xs, movPos, psiInsideFrac) || psiST);
       r.dashedLine(movPos, psiCur, C.teal, 1.5, 0.5);
       r.dot(psiCur, C.teal, 6, 0.9);
@@ -728,10 +964,9 @@ class SectionMeanDenoiser {
       }
     }
 
-    // Step 3: secant arrow + dashed to ψ_{s,t}
-    const secT = a.e(3);
+    // Step 2: secant arrow + dashed to ψ_{s,t}
+    const secT = a.e(2);
     if (secT > 0) {
-      // Redraw everything from step 2 fully
       r.curve(pts, '#2e4552', 3, 1);
       r.dot(x0, C.maroon, 5); r.dot(xs, C.maroon, 5); r.dot(xt, C.maroon, 5);
       r.mathLabel('x\u2080', [x0[0] + 16, x0[1] + 4], { color: C.maroon, size: 17 });
@@ -739,19 +974,14 @@ class SectionMeanDenoiser {
       r.mathLabel('x\u209C', [xt[0] - 18, xt[1] + 2], { color: C.maroon, size: 17 });
       r.mathLabel('x\u2081', [x1[0] - 8, x1[1] + 18], { color: C.maroon, size: 17 });
 
-      // Smooth connector curve on the simplex between the two denoisers.
       r.curve(psiConnectorPts, C.teal, 2.5, 0.6);
       r.dot(psiSS, C.teal, 6); r.dot(psiST, C.teal, 7);
       r.mathLabel('\u03C8\u209B,\u209B', [psiSS[0] + 18, psiSS[1] - 14], { color: C.teal, size: 17 });
       r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 24, psiST[1] - 14], { color: C.teal, size: 17 });
 
-      // Tangent fades out as we switch to the secant view (matches mean_denoiser.py).
       r.tangentRay(xs, tangentTarget, 0.80 * r.scale, C.teal, 2.5, 0.8 * (1 - secT));
-
-      // Secant arrow from x_s to x_t
       r.arrow(xs, xt, C.maroon, 2.5, secT);
 
-      // Keep the tangent projection at x_s and reveal the secant projection at x_t.
       r.dashedLine(xs, psiSS, C.teal, 2, 0.7);
       r.dashedLine(xt, psiST, C.teal, 2, 0.7 * secT);
     }
@@ -760,13 +990,13 @@ class SectionMeanDenoiser {
 
 // ─── D: Flow Map X_{s,t} ───
 class SectionFlowMap {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
     this._trajPts = null;
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); this._trajPts = null; }
+  resize() { this._trajPts = null; }
 
   get trajPts() {
     if (!this._trajPts) this._trajPts = this.r.trajectoryPoints(120);
@@ -777,10 +1007,6 @@ class SectionFlowMap {
     this.a.tick(dt);
     const r = this.r, a = this.a;
     r.clear();
-
-    r.drawTriangle(1);
-    r.drawVertices(1);
-    r.drawVertexLabels(1);
 
     const pts = this.trajPts;
     const xsParam = MEAN_XS_PARAM;
@@ -795,50 +1021,162 @@ class SectionFlowMap {
     );
     const psiST = r.psiFromSecant(xs, xt, psiInsideFrac);
 
-    // Always show trajectory lightly
-    r.curve(pts, C.ink, 2, 0.3);
+    // Fade factor for steps 0-1 when flashlight (step 2) is active
+    const s2pre = a.p(2);
+    const preFade = 1 - s2pre;
+
+    // Simplex and trajectory (fade when flashlight takes over)
+    r.drawTriangle(preFade > 0.01 ? preFade : 0);
+    r.drawVertices(preFade);
+    r.drawVertexLabels(preFade);
+    r.curve(pts, C.ink, 2, 0.3 * preFade);
 
     // Step 0: show flow map — convex combination
     const fmT = a.e(0);
-    if (fmT > 0) {
-      r.dot(xs, C.maroon, 6, fmT);
-      r.mathLabel('x\u209B', [xs[0] + 16, xs[1] + 2], { color: C.maroon, size: 17, opacity: fmT });
+    if (fmT > 0 && preFade > 0) {
+      const o = fmT * preFade;
+      r.dot(xs, C.maroon, 6, o);
+      r.mathLabel('x\u209B', [xs[0] + 16, xs[1] + 2], { color: C.maroon, size: 17, opacity: o });
 
-      r.dot(psiST, C.teal, 7, fmT);
-      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 24, psiST[1] - 14], { color: C.teal, size: 17, opacity: fmT });
+      r.dot(psiST, C.teal, 7, o);
+      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 24, psiST[1] - 14], { color: C.teal, size: 17, opacity: o });
 
       // Draw the secant line from xs through xt to psiST on the simplex
-      r.dashedLine(xs, psiST, C.cloud, 1.5, fmT * 0.4);
+      r.dashedLine(xs, psiST, C.cloud, 1.5, o * 0.4);
 
       // X_{s,t} = xt lies on this line — show it as the convex combination
-      // Example coefficient for the illustrated (x_s, x_t) pair.
-      r.dot(xt, C.gold, 7, fmT);
-      r.mathLabel('X\u209B,\u209C', [xt[0] + 18, xt[1] - 12], { color: C.gold, size: 18, opacity: fmT });
+      r.dot(xt, C.gold, 7, o);
+      r.mathLabel('X\u209B,\u209C', [xt[0] + 18, xt[1] - 12], { color: C.gold, size: 18, opacity: o });
 
       // Show that xt sits on the line between xs and psiST
-      r.curve([xs, psiST], C.cloud, 1.5, 0.25 * fmT);
+      r.curve([xs, psiST], C.cloud, 1.5, 0.25 * o);
     }
 
     // Step 1: animate the interpolation
     const intT = a.e(1);
-    if (intT > 0) {
-      r.dot(xs, C.maroon, 6);
-      r.dot(psiST, C.teal, 7);
-      r.mathLabel('x\u209B', [xs[0] + 16, xs[1] + 2], { color: C.maroon, size: 17 });
-      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 24, psiST[1] - 14], { color: C.teal, size: 17 });
+    if (intT > 0 && preFade > 0) {
+      const o = intT * preFade;
+      r.dot(xs, C.maroon, 6, preFade);
+      r.dot(psiST, C.teal, 7, preFade);
+      r.mathLabel('x\u209B', [xs[0] + 16, xs[1] + 2], { color: C.maroon, size: 17, opacity: preFade });
+      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 24, psiST[1] - 14], { color: C.teal, size: 17, opacity: preFade });
 
       // Line from xs to psiST
-      r.curve([xs, psiST], C.cloud, 1.5, 0.3);
+      r.curve([xs, psiST], C.cloud, 1.5, 0.3 * preFade);
 
       // Moving dot along the interpolation line between xs and psiST
       const pingPong = (Math.sin(performance.now() / 1500) + 1) / 2;
       const beta = lerp(0.1, 0.9, pingPong);
       const movPos = lerp2(xs, psiST, beta);
-      r.dot(movPos, C.gold, 6, intT);
+      r.dot(movPos, C.gold, 6, o);
 
       // Show xt on the line
-      r.dot(xt, C.maroon, 5, intT * 0.7);
-      r.mathLabel('x\u209C', [xt[0] - 16, xt[1] + 2], { color: C.maroon, size: 16, opacity: intT * 0.5 });
+      r.dot(xt, C.maroon, 5, o * 0.7);
+      r.mathLabel('x\u209C', [xt[0] - 16, xt[1] + 2], { color: C.maroon, size: 16, opacity: o * 0.5 });
+    }
+
+    // Step 2: flashlight / shadow animation
+    const shadowT = a.e(2);
+    if (shadowT > 0) {
+      const ctx = r.ctx;
+
+      // Sweep t from xs param toward 1.0
+      const sweep = (Math.sin(performance.now() / 2800 - Math.PI / 2) + 1) / 2;
+      const tSweep = lerp(MEAN_XS_PARAM + 0.02, 0.98, sweep);
+      const xCur = r.trajectoryPoint(tSweep);
+      const psiCur = r.psiFromSecant(xs, xCur, psiInsideFrac);
+
+      // — Darken the simplex area —
+      ctx.save();
+      ctx.globalAlpha = shadowT * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(...r.vFox); ctx.lineTo(...r.vDog); ctx.lineTo(...r.vCat); ctx.closePath();
+      ctx.fillStyle = '#1a2a32';
+      ctx.fill();
+      ctx.restore();
+
+      // Redraw simplex edges faintly over the dark fill
+      ctx.save();
+      ctx.globalAlpha = shadowT * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(...r.vFox); ctx.lineTo(...r.vDog); ctx.lineTo(...r.vCat); ctx.closePath();
+      ctx.strokeStyle = C.cloud;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+
+      // — Flashlight cone from x_t toward ψ_{s,t} —
+      const dx = psiCur[0] - xCur[0], dy = psiCur[1] - xCur[1];
+      const dist = Math.hypot(dx, dy);
+      const ux = dx / dist, uy = dy / dist;
+      // Perpendicular for cone spread
+      const px = -uy, py = ux;
+      const coneSpread = dist * 0.18;
+      const coneLen = dist * 1.05;
+
+      // Cone gradient
+      const coneEnd = [xCur[0] + ux * coneLen, xCur[1] + uy * coneLen];
+      const grad = ctx.createRadialGradient(
+        psiCur[0], psiCur[1], 0,
+        psiCur[0], psiCur[1], coneSpread * 2.5
+      );
+      grad.addColorStop(0, 'rgba(212, 168, 67, ' + (0.35 * shadowT) + ')');
+      grad.addColorStop(0.5, 'rgba(212, 168, 67, ' + (0.12 * shadowT) + ')');
+      grad.addColorStop(1, 'rgba(212, 168, 67, 0)');
+
+      // Draw cone as a triangle from xCur fanning to psiCur area
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(xCur[0], xCur[1]);
+      ctx.lineTo(coneEnd[0] + px * coneSpread, coneEnd[1] + py * coneSpread);
+      ctx.lineTo(coneEnd[0] - px * coneSpread, coneEnd[1] - py * coneSpread);
+      ctx.closePath();
+      ctx.clip();
+
+      // Fill the clipped cone with gradient
+      ctx.fillStyle = grad;
+      ctx.fillRect(
+        Math.min(xCur[0], psiCur[0]) - coneSpread * 3,
+        Math.min(xCur[1], psiCur[1]) - coneSpread * 3,
+        Math.abs(xCur[0] - psiCur[0]) + coneSpread * 6,
+        Math.abs(xCur[1] - psiCur[1]) + coneSpread * 6
+      );
+      ctx.restore();
+
+      // — Illuminated ψ_{s,t} glow —
+      const glowR = r.scale * 0.18;
+      const glowGrad = ctx.createRadialGradient(
+        psiCur[0], psiCur[1], 0,
+        psiCur[0], psiCur[1], glowR
+      );
+      glowGrad.addColorStop(0, 'rgba(212, 168, 67, ' + (0.5 * shadowT) + ')');
+      glowGrad.addColorStop(0.4, 'rgba(212, 168, 67, ' + (0.2 * shadowT) + ')');
+      glowGrad.addColorStop(1, 'rgba(212, 168, 67, 0)');
+      ctx.save();
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.arc(psiCur[0], psiCur[1], glowR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // ψ dot and label
+      r.dot(psiCur, C.gold, 6, shadowT);
+      r.mathLabel('\u03C8\u209B,\u209C', [psiCur[0] + 16, psiCur[1] - 12],
+        { color: C.gold, size: 16, opacity: shadowT });
+
+      // x_t dot on the trajectory (the "source of light")
+      r.dot(xCur, C.gold, 5, shadowT);
+
+      // Faint dashed connection line
+      r.dashedLine(xCur, psiCur, C.gold, 1, shadowT * 0.3);
+
+      // Trajectory shown faintly
+      r.curve(pts, C.cloud, 1.5, shadowT * 0.2);
+
+      // x_s anchor
+      r.dot(xs, C.maroon, 4, shadowT * 0.5);
+      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4],
+        { color: C.maroon, size: 15, opacity: shadowT * 0.4 });
     }
   }
 }
@@ -880,13 +1218,13 @@ function drawLossBase(r, pts) {
 
 // ─── E: PSD Loss ───
 class SectionPSD {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
     this._trajPts = null;
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); this._trajPts = null; }
+  resize() { this._trajPts = null; }
 
   get trajPts() {
     if (!this._trajPts) this._trajPts = this.r.trajectoryPoints(120);
@@ -945,13 +1283,13 @@ class SectionPSD {
 
 // ─── F: LSD Loss ───
 class SectionLSD {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
     this._trajPts = null;
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); this._trajPts = null; }
+  resize() { this._trajPts = null; }
 
   get trajPts() {
     if (!this._trajPts) this._trajPts = this.r.trajectoryPoints(120);
@@ -1011,13 +1349,13 @@ class SectionLSD {
 
 // ─── G: ESD Loss ───
 class SectionESD {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
     this._trajPts = null;
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); this._trajPts = null; }
+  resize() { this._trajPts = null; }
 
   get trajPts() {
     if (!this._trajPts) this._trajPts = this.r.trajectoryPoints(120);
@@ -1085,13 +1423,13 @@ class SectionESD {
 
 // ─── H: dPSD Loss ───
 class SectionDPSD {
-  constructor(canvas) {
-    this.r = new SimplexRenderer(canvas);
+  constructor(renderer) {
+    this.r = renderer;
     this.a = new Anim();
     this._trajPts = null;
   }
   setStep(s) { this.a.setStep(s); }
-  resize() { this.r.resize(); this._trajPts = null; }
+  resize() { this._trajPts = null; }
 
   get trajPts() {
     if (!this._trajPts) this._trajPts = this.r.trajectoryPoints(120);
@@ -1230,7 +1568,7 @@ class SectionParallel {
 
     for (let i = 0; i < this.L; i++) {
       const cx = spacing * (i + 1);
-      const cy = r.h * 0.42;
+      const cy = r.h * 0.3;
 
       // Mini simplex vertices
       const vTop  = [cx, cy - miniScale * 1.1];
@@ -1266,7 +1604,7 @@ class SectionParallel {
       {
         const isLanded = t1 >= 1;
         const wordOpacity = isLanded ? 1 : (t1 > 0 ? 0.3 + 0.7 * t1 : 0.4);
-        const labelY = vLeft[1] + miniScale * 0.45;
+        const labelY = vLeft[1] + miniScale * 0.08;
 
         ctx.save();
         ctx.globalAlpha = t0 * wordOpacity;
@@ -1279,7 +1617,7 @@ class SectionParallel {
       }
 
       // Noise point below
-      const noiseY = cy + miniScale * 2.5 + this.noiseY[i] * miniScale;
+      const noiseY = cy + miniScale * 1.8 + this.noiseY[i] * miniScale;
       const noisePos = [cx, noiseY];
 
       if (t1 > 0) {
@@ -1317,18 +1655,21 @@ class SectionParallel {
 
     // Assembled sentence below the simplexes
     if (t1 > 0.3) {
-      const sentenceY = r.h * 0.82;
+      const sentenceY = r.h * 0.3 + miniScale * 3.2;
       const sentence = this.targets.map((v, i) => this.bank[i][v]).join(' ');
       const sentOpacity = clamp((t1 - 0.3) * 2, 0, 1);
 
       const ctx = r.ctx;
+      const fontSize = Math.max(13, miniScale * 0.32);
       ctx.save();
       ctx.globalAlpha = sentOpacity;
-      ctx.font = `italic ${Math.max(13, miniScale * 0.32)}px Inter, system-ui, sans-serif`;
+      ctx.font = `italic ${fontSize}px Inter, system-ui, sans-serif`;
       ctx.fillStyle = C.ink;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`"${sentence}"`, r.w / 2, sentenceY);
+      const sentText = `\u201c${sentence}\u201d`;
+      const sentW = ctx.measureText(sentText).width;
+      ctx.fillText(sentText, r.w / 2, sentenceY);
       ctx.restore();
 
       // ── Replay button: abstracted green simplex icon with circular arrow ──
@@ -1337,13 +1678,7 @@ class SectionParallel {
         const hover = this._replayHover;
         const ctx2 = r.ctx;
 
-        // Measure sentence width with matching font
-        ctx2.save();
-        ctx2.font = `italic ${Math.max(13, miniScale * 0.32)}px Inter, system-ui, sans-serif`;
-        const sentW = ctx2.measureText(`"${sentence}"`).width;
-        ctx2.restore();
-
-        // Button position: right of the sentence
+        // Button position: right of the pill
         const btnSize = Math.max(18, miniScale * 0.38);
         const btnX = r.w / 2 + sentW / 2 + btnSize * 1.2;
         const btnY = sentenceY;
@@ -1414,27 +1749,28 @@ class SectionParallel {
 // Arithmetic examples for steering visualization.
 // Each example: array of { tokens: [left,top,right], greenTarget, redTarget }.
 // Green lands on a wrong answer; red steers to the correct one.
+// Discrepancies intentionally span multiple token positions.
 const STEER_EXAMPLES = [
-  // 12 + 7 = 19, green says 18
+  // 15 + 8 = 23, green says 31 (swapped digits + wrong)
   [
-    { tokens: ['1','7','3'],  greenTarget: 0, redTarget: 0 },
-    { tokens: ['2','8','0'],  greenTarget: 0, redTarget: 0 },
+    { tokens: ['1','0','5'],  greenTarget: 0, redTarget: 0 },
+    { tokens: ['5','8','2'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['+','−','×'], greenTarget: 0, redTarget: 0 },
-    { tokens: ['7','5','9'],  greenTarget: 0, redTarget: 0 },
+    { tokens: ['8','5','3'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['=',':','→'], greenTarget: 0, redTarget: 0 },
-    { tokens: ['1','2','0'],  greenTarget: 0, redTarget: 0 },
-    { tokens: ['8','9','7'],  greenTarget: 0, redTarget: 1 },  // 8→9
+    { tokens: ['3','2','1'],  greenTarget: 0, redTarget: 1 },  // 3→2
+    { tokens: ['1','3','7'],  greenTarget: 0, redTarget: 1 },  // 1→3
   ],
-  // 9 × 6 = 54, green says 56
+  // 9 × 6 = 54, green says 45 (digit swap)
   [
     { tokens: ['9','7','3'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['×','+','−'], greenTarget: 0, redTarget: 0 },
     { tokens: ['6','4','8'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['=',':','→'], greenTarget: 0, redTarget: 0 },
-    { tokens: ['5','3','6'],  greenTarget: 0, redTarget: 0 },
-    { tokens: ['6','4','8'],  greenTarget: 0, redTarget: 1 },  // 6→4
+    { tokens: ['4','5','6'],  greenTarget: 0, redTarget: 1 },  // 4→5
+    { tokens: ['5','4','8'],  greenTarget: 0, redTarget: 1 },  // 5→4
   ],
-  // 45 − 18 = 27, green says 23
+  // 45 − 18 = 27, green says 33 (borrow error)
   [
     { tokens: ['4','2','6'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['5','8','1'],  greenTarget: 0, redTarget: 0 },
@@ -1442,19 +1778,19 @@ const STEER_EXAMPLES = [
     { tokens: ['1','3','2'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['8','5','0'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['=',':','→'], greenTarget: 0, redTarget: 0 },
-    { tokens: ['2','3','1'],  greenTarget: 0, redTarget: 0 },
+    { tokens: ['3','2','1'],  greenTarget: 0, redTarget: 1 },  // 3→2
     { tokens: ['3','7','9'],  greenTarget: 0, redTarget: 1 },  // 3→7
   ],
-  // 8 × 7 = 56, green says 54
+  // 7 × 8 = 56, green says 48 (off by a full row)
   [
-    { tokens: ['8','5','3'],  greenTarget: 0, redTarget: 0 },
+    { tokens: ['7','5','3'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['×','+','−'], greenTarget: 0, redTarget: 0 },
-    { tokens: ['7','9','4'],  greenTarget: 0, redTarget: 0 },
+    { tokens: ['8','9','4'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['=',':','→'], greenTarget: 0, redTarget: 0 },
-    { tokens: ['5','4','6'],  greenTarget: 0, redTarget: 0 },
-    { tokens: ['4','6','8'],  greenTarget: 0, redTarget: 1 },  // 4→6
+    { tokens: ['4','5','6'],  greenTarget: 0, redTarget: 1 },  // 4→5
+    { tokens: ['8','6','2'],  greenTarget: 0, redTarget: 1 },  // 8→6
   ],
-  // 25 + 37 = 62, green says 52 (carry error)
+  // 25 + 37 = 62, green says 52 (carry error, 2 digits wrong)
   [
     { tokens: ['2','3','1'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['5','7','9'],  greenTarget: 0, redTarget: 0 },
@@ -1463,9 +1799,9 @@ const STEER_EXAMPLES = [
     { tokens: ['7','5','1'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['=',':','→'], greenTarget: 0, redTarget: 0 },
     { tokens: ['5','6','4'],  greenTarget: 0, redTarget: 1 },  // 5→6
-    { tokens: ['2','0','8'],  greenTarget: 0, redTarget: 0 },
+    { tokens: ['2','0','8'],  greenTarget: 2, redTarget: 1 },  // 8→0  (was outputting garbage)
   ],
-  // 100 ÷ 4 = 25, green says 24
+  // 100 ÷ 4 = 25, green says 52 (fully swapped)
   [
     { tokens: ['1','2','0'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['0','5','8'],  greenTarget: 0, redTarget: 0 },
@@ -1473,8 +1809,8 @@ const STEER_EXAMPLES = [
     { tokens: ['÷','×','+'], greenTarget: 0, redTarget: 0 },
     { tokens: ['4','5','2'],  greenTarget: 0, redTarget: 0 },
     { tokens: ['=',':','→'], greenTarget: 0, redTarget: 0 },
-    { tokens: ['2','3','1'],  greenTarget: 0, redTarget: 0 },
-    { tokens: ['4','5','8'],  greenTarget: 0, redTarget: 1 },  // 4→5
+    { tokens: ['5','2','1'],  greenTarget: 0, redTarget: 1 },  // 5→2
+    { tokens: ['2','5','8'],  greenTarget: 0, redTarget: 1 },  // 2→5
   ],
 ];
 
@@ -1488,7 +1824,6 @@ class SectionSteering {
   _pickExample() {
     this.positions = STEER_EXAMPLES[Math.floor(Math.random() * STEER_EXAMPLES.length)];
     this.L = this.positions.length;
-    this.noiseY = Array.from({ length: this.L }, () => (Math.random() - 0.5) * 0.2);
   }
 
   setStep(s) {
@@ -1516,7 +1851,7 @@ class SectionSteering {
     for (let i = 0; i < this.L; i++) {
       const pos = this.positions[i];
       const cx = spacing * (i + 1);
-      const cy = r.h * 0.40;
+      const cy = r.h * 0.30;
 
       // Mini simplex vertices
       const vTop  = [cx, cy - miniScale * 1.1];
@@ -1561,9 +1896,8 @@ class SectionSteering {
         ctx.restore();
       }
 
-      // Noise start
-      const noiseY = cy + miniScale * 2.2 + this.noiseY[i] * miniScale;
-      const noisePos = [cx, noiseY];
+      // Start position: below the bottom edge of the triangle (matching diagrams above)
+      const noisePos = [cx, vLeft[1] + miniScale * 1.6];
 
       // Green trajectory (base model) — always visible from step 0
       const greenTarget = verts[pos.greenTarget];
@@ -1607,35 +1941,33 @@ class SectionSteering {
         ctx.restore();
       }
 
-      // Red trajectory (steered) — appears in step 1
+      // Red trajectory (steered) — smooth cubic Bezier from noisePos to redTarget
+      // cp1 pulls toward greenTarget (shared initial direction), cp2 pulls toward redTarget
       if (t1 > 0) {
         const redTarget = verts[pos.redTarget];
         const redFlowT = clamp(t1 * 1.5 - i * 0.06, 0, 1);
         const redFt = easeInOut(redFlowT);
 
-        // Red starts from same noise but diverges partway
-        const divergeT = 0.4;
-        let redCur;
-        if (redFt < divergeT) {
-          // Follows green path initially
-          redCur = lerp2(noisePos, greenTarget, redFt);
-        } else {
-          // Diverges toward red target
-          const divergePos = lerp2(noisePos, greenTarget, divergeT);
-          const localT = (redFt - divergeT) / (1 - divergeT);
-          redCur = lerp2(divergePos, redTarget, easeInOut(localT));
-        }
+        // Cubic Bezier control points: start heading toward green, then veer to red
+        const cp1 = [lerp(noisePos[0], greenTarget[0], 0.45) + (i % 2 ? 4 : -4),
+                      lerp(noisePos[1], greenTarget[1], 0.45)];
+        const cp2 = [lerp(noisePos[0], redTarget[0], 0.7) + (i % 2 ? -4 : 4),
+                      lerp(noisePos[1], redTarget[1], 0.7)];
+
+        // Evaluate cubic Bezier at redFt for the moving dot
+        const t = redFt;
+        const mt = 1 - t;
+        const redCur = [
+          mt*mt*mt*noisePos[0] + 3*mt*mt*t*cp1[0] + 3*mt*t*t*cp2[0] + t*t*t*redTarget[0],
+          mt*mt*mt*noisePos[1] + 3*mt*mt*t*cp1[1] + 3*mt*t*t*cp2[1] + t*t*t*redTarget[1],
+        ];
 
         // Red trail
-        const divergePos = lerp2(noisePos, greenTarget, divergeT);
         ctx.save();
         ctx.globalAlpha = 0.3 * t1;
         ctx.beginPath();
-        ctx.moveTo(...divergePos);
-        const rMid = [lerp(divergePos[0], redTarget[0], 0.5) + (i % 2 ? -6 : 6),
-                      lerp(divergePos[1], redTarget[1], 0.5)];
-        const rEnd = redFt >= 1 ? redTarget : redCur;
-        ctx.quadraticCurveTo(...rMid, ...rEnd);
+        ctx.moveTo(...noisePos);
+        ctx.bezierCurveTo(...cp1, ...cp2, ...redCur);
         ctx.strokeStyle = redColor;
         ctx.lineWidth = 1.8;
         ctx.stroke();
@@ -1667,8 +1999,8 @@ class SectionSteering {
       }
     }
 
-    // Assembled answer strings below
-    const answerY = r.h * 0.78;
+    // Assembled answer strings below — position relative to triangles
+    const answerY = r.h * 0.30 + miniScale * 2.8;
     const ctx2 = r.ctx;
 
     // Green answer (base)
@@ -1720,21 +2052,35 @@ class SectionSteering {
 // ════════════════════════════════════════════════════════════
 //  SCROLL OBSERVER
 // ════════════════════════════════════════════════════════════
+// Names of sections sharing the single simplex canvas
+const SHARED_SECTIONS = [
+  'simplex', 'interpolant', 'denoiser-inst', 'mean-denoiser',
+  'flow-map', 'psd', 'lsd', 'esd', 'dpsd',
+];
+
+let activeSimplexSection = 'simplex';
+
 function initScrollObserver(sections) {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
       const stepEl = entry.target;
-      const sectionEl = stepEl.closest('.scroll-section');
+      // Works for both .text-section (shared group) and .scroll-section (parallel/steering)
+      const sectionEl = stepEl.closest('[data-section]');
       if (!sectionEl) return;
       const sectionName = sectionEl.dataset.section;
       const stepIdx = parseInt(stepEl.dataset.step, 10);
       const section = sections.get(sectionName);
       if (!section) return;
 
-      // Update active step CSS class
-      section.steps.forEach(s => s.classList.remove('is-active'));
+      // Update active step CSS class — deactivate ALL steps across every section
+      sections.forEach(({ steps }) => steps.forEach(s => s.classList.remove('is-active')));
       stepEl.classList.add('is-active');
+
+      // Track which shared section is active
+      if (SHARED_SECTIONS.includes(sectionName)) {
+        activeSimplexSection = sectionName;
+      }
 
       // Tell controller
       section.controller.setStep(stepIdx);
@@ -1768,23 +2114,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Section configs: [data-section name, Controller class, canvas ID]
-  const configs = [
-    ['simplex',       SectionSimplex,       'canvas-simplex'],
-    ['denoiser-inst', SectionDenoiserInst,  'canvas-denoiser-inst'],
-    ['mean-denoiser', SectionMeanDenoiser,  'canvas-mean-denoiser'],
-    ['flow-map',      SectionFlowMap,       'canvas-flow-map'],
-    ['psd',           SectionPSD,           'canvas-psd'],
-    ['lsd',           SectionLSD,           'canvas-lsd'],
-    ['esd',           SectionESD,           'canvas-esd'],
-    ['dpsd',          SectionDPSD,          'canvas-dpsd'],
-    ['parallel',      SectionParallel,      'canvas-parallel'],
-    ['steering',      SectionSteering,      'canvas-steering'],
+  // Shared simplex canvas & renderer
+  const sharedCanvas = document.getElementById('canvas-simplex-shared');
+  const sharedRenderer = new SimplexRenderer(sharedCanvas);
+
+  // Shared sections: all use the same renderer
+  const sharedConfigs = [
+    ['simplex',       SectionSimplex],
+    ['interpolant',   SectionInterpolant],
+    ['denoiser-inst', SectionDenoiserInst],
+    ['mean-denoiser', SectionMeanDenoiser],
+    ['flow-map',      SectionFlowMap],
+    ['psd',           SectionPSD],
+    ['lsd',           SectionLSD],
+    ['esd',           SectionESD],
+    ['dpsd',          SectionDPSD],
+  ];
+
+  // Independent sections: each has its own canvas
+  const independentConfigs = [
+    ['parallel',  SectionParallel,  'canvas-parallel'],
+    ['steering',  SectionSteering,  'canvas-steering'],
   ];
 
   const sections = new Map();
 
-  for (const [name, Ctrl, canvasId] of configs) {
+  // Init shared sections
+  for (const [name, Ctrl] of sharedConfigs) {
+    const sectionEl = document.querySelector(`[data-section="${name}"]`);
+    if (!sectionEl) continue;
+    const steps = sectionEl.querySelectorAll('.scroll-step');
+    const controller = new Ctrl(sharedRenderer);
+    sections.set(name, { controller, steps });
+  }
+
+  // Init independent sections
+  for (const [name, Ctrl, canvasId] of independentConfigs) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) continue;
     const sectionEl = document.querySelector(`[data-section="${name}"]`);
@@ -1801,6 +2166,9 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
+      // Resize the shared renderer once
+      sharedRenderer.resize();
+      // Notify all controllers (shared ones clear caches, independent ones resize their own renderer)
       sections.forEach(({ controller }) => controller.resize());
     }, 150);
   });
@@ -1812,8 +2180,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
 
-    sections.forEach(({ controller }) => {
-      controller.draw(dt);
+    sections.forEach(({ controller }, name) => {
+      if (SHARED_SECTIONS.includes(name)) {
+        // Only draw the active shared section
+        if (name === activeSimplexSection) {
+          controller.draw(dt);
+        }
+      } else {
+        // Independent sections always draw
+        controller.draw(dt);
+      }
     });
 
     requestAnimationFrame(frame);
