@@ -294,6 +294,26 @@ class SimplexRenderer {
     ctx.restore();
   }
 
+  /** Draw a label with a subscript, e.g. mathLabelSub('x', 't', pos, opts) */
+  mathLabelSub(base, sub, pos, opts = {}) {
+    const { color = C.ink, size = 18, italic = true, opacity = 1 } = opts;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    // Base character
+    ctx.font = `${italic ? 'italic ' : ''}${size}px 'KaTeX_Math', 'Times New Roman', serif`;
+    ctx.fillText(base, pos[0], pos[1]);
+    const baseW = ctx.measureText(base).width;
+    // Subscript (smaller, lowered)
+    const subSize = Math.round(size * 0.7);
+    ctx.font = `${italic ? 'italic ' : ''}${subSize}px 'KaTeX_Math', 'Times New Roman', serif`;
+    ctx.fillText(sub, pos[0] + baseW, pos[1] + size * 0.25);
+    ctx.restore();
+  }
+
   weightedLine(from, to, weight, color = C.teal, maxW = 7, opacity = 0.7) {
     const ctx = this.ctx;
     ctx.save();
@@ -781,12 +801,6 @@ class SectionInterpolant {
         r.arrow(xs, arrowEnd, C.gold, 3, avgT);
         r.mathLabel('b\u209B(x\u209B)', [arrowEnd[0] + 12, arrowEnd[1] - 8],
           { color: C.gold, size: 16, opacity: avgT });
-
-        r.dot(psiSS, C.teal, 7 * avgT, avgT);
-        r.mathLabel('\u03C8\u209B,\u209B', [psiSS[0] + 18, psiSS[1] - 14],
-          { color: C.teal, size: 17, opacity: avgT });
-
-        r.dashedLine(arrowEnd, psiSS, C.gold, 1.5, avgT * 0.3);
       }
     }
   }
@@ -813,8 +827,102 @@ class SectionDenoiserInst {
 
     const psiPos = r.bary(P_FOX, P_DOG, P_CAT);
 
-    // Step 0: weighted lines grow
-    const lnT = a.e(0);
+    // Step 0: velocity field diagram + ψ_{s,s}
+
+    const dotT = a.e(0);
+    if (dotT > 0) {
+            // Reproduce velocity field diagram from interpolant step 2
+      const vertColors = [C.green1, C.green2, C.green3];
+      const vertices = [r.vFox, r.vDog, r.vCat];
+      const xs = r.trajectoryPoint(MEAN_XS_PARAM);
+      const s = MEAN_XS_PARAM;
+
+      // Generate interpolant lines through x_s
+      const lineCounts = [6, 3, 9];
+      const allLines = [];
+      for (let vi = 0; vi < 3; vi++) {
+        const v = vertices[vi];
+        const x0base = [
+          (xs[0] - s * v[0]) / (1 - s),
+          (xs[1] - s * v[1]) / (1 - s),
+        ];
+        for (let j = 0; j < lineCounts[vi]; j++) {
+          const jAng = ((vi * 7 + j * 3 + 1) % 13) / 13 * Math.PI * 2;
+          const jR = r.scale * 0.04 * ((j % 3) + 1);
+          const x0 = [x0base[0] + Math.cos(jAng) * jR,
+                       x0base[1] + Math.sin(jAng) * jR];
+          allLines.push({ x0, v, target: vi });
+        }
+      }
+
+      // Draw interpolant lines
+      for (const ln of allLines) {
+        const vc = vertColors[ln.target];
+        const ctx2 = r.ctx;
+        ctx2.save();
+        ctx2.globalAlpha = dotT * 0.18;
+        ctx2.beginPath();
+        ctx2.moveTo(...ln.x0);
+        ctx2.lineTo(...ln.v);
+        ctx2.strokeStyle = vc;
+        ctx2.lineWidth = 1.5;
+        ctx2.stroke();
+        ctx2.restore();
+        r.dot(ln.x0, C.cloud, 2.5, dotT * 0.3);
+      }
+
+      // x_s dot
+      r.dot(xs, C.maroon, 6, dotT);
+      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4],
+        { color: C.maroon, size: 17, opacity: dotT });
+
+      // Velocity arrows at x_s
+      const arrowLen = r.scale * 0.45;
+      for (const ln of allLines) {
+        const dx = ln.v[0] - ln.x0[0], dy = ln.v[1] - ln.x0[1];
+        const d = Math.hypot(dx, dy);
+        if (d < 1e-6) continue;
+        const end = [xs[0] + (dx / d) * arrowLen, xs[1] + (dy / d) * arrowLen];
+        const vc = vertColors[ln.target];
+        const ctx2 = r.ctx;
+        ctx2.save();
+        ctx2.globalAlpha = dotT * 0.25;
+        ctx2.beginPath();
+        ctx2.moveTo(...xs);
+        ctx2.lineTo(...end);
+        ctx2.strokeStyle = vc;
+        ctx2.lineWidth = 1.5;
+        ctx2.lineCap = 'round';
+        ctx2.stroke();
+        const angle = Math.atan2(dy, dx);
+        const hl = 5;
+        ctx2.beginPath();
+        ctx2.moveTo(end[0], end[1]);
+        ctx2.lineTo(end[0] - hl * Math.cos(angle - 0.4), end[1] - hl * Math.sin(angle - 0.4));
+        ctx2.lineTo(end[0] - hl * Math.cos(angle + 0.4), end[1] - hl * Math.sin(angle + 0.4));
+        ctx2.closePath();
+        ctx2.fillStyle = vc;
+        ctx2.fill();
+        ctx2.restore();
+      }
+
+      // Gold average arrow toward ψ_{s,s}
+      const toPsi = [psiPos[0] - xs[0], psiPos[1] - xs[1]];
+      const psiDist = Math.hypot(toPsi[0], toPsi[1]);
+      const arrowEnd = [xs[0] + (toPsi[0] / psiDist) * psiDist * 0.55,
+                        xs[1] + (toPsi[1] / psiDist) * psiDist * 0.55];
+      r.arrow(xs, arrowEnd, C.gold, 3, dotT);
+      r.mathLabel('b\u209B(x\u209B)', [arrowEnd[0] + 12, arrowEnd[1] - 8],
+        { color: C.gold, size: 16, opacity: dotT });
+
+      // ψ_{s,s} dot + dashed line
+      r.dot(psiPos, C.teal, 7 * dotT, dotT);
+      r.mathLabel('\u03C8\u209B,\u209B', [psiPos[0] + 20, psiPos[1] - 16], { color: C.teal, size: 18, opacity: dotT });
+      r.dashedLine(arrowEnd, psiPos, C.gold, 1.5, dotT * 0.3);
+    }
+
+    // Step 1: ψ_{s,s} with weighted vertex lines and p labels
+    const lnT = a.e(1);
     if (lnT > 0) {
       const foxEnd = lerp2(r.vFox, psiPos, lnT);
       const dogEnd = lerp2(r.vDog, psiPos, lnT);
@@ -830,18 +938,10 @@ class SectionDenoiserInst {
         r.mathLabel('p\u2082', lerp2(r.vDog, psiPos, 0.42).map((v, i) => v + (i === 0 ? -14 : 0)), { color: C.ink, size: 16, opacity: lo });
         r.mathLabel('p\u2083', lerp2(r.vCat, psiPos, 0.48).map((v, i) => v + (i === 1 ? -14 : 0)), { color: C.ink, size: 16, opacity: lo });
       }
-    }
 
-    // Step 1: ψ_{s,s} dot + label
-    const dotT = a.e(1);
-    if (dotT > 0) {
-      // Full weighted lines
-      r.weightedLine(r.vFox, psiPos, P_FOX, C.teal, 8, 0.55);
-      r.weightedLine(r.vDog, psiPos, P_DOG, C.teal, 8, 0.55);
-      r.weightedLine(r.vCat, psiPos, P_CAT, C.teal, 8, 0.55);
-
-      r.dot(psiPos, C.teal, 7 * dotT, dotT);
-      r.mathLabel('\u03C8\u209B,\u209B', [psiPos[0] + 20, psiPos[1] - 16], { color: C.teal, size: 18, opacity: dotT });
+      // ψ_{s,s} dot + label
+      r.dot(psiPos, C.teal, 7 * lnT, lnT);
+      r.mathLabel('\u03C8\u209B,\u209B', [psiPos[0] + 20, psiPos[1] - 16], { color: C.teal, size: 18, opacity: lnT });
     }
   }
 }
@@ -1021,9 +1121,9 @@ class SectionFlowMap {
     );
     const psiST = r.psiFromSecant(xs, xt, psiInsideFrac);
 
-    // Fade factor for steps 0-1 when flashlight (step 2) is active
-    const s2pre = a.p(2);
-    const preFade = 1 - s2pre;
+    // Fade factor when flashlight (step 1) is active
+    const s1pre = a.p(1);
+    const preFade = 1 - s1pre;
 
     // Simplex and trajectory (fade when flashlight takes over)
     r.drawTriangle(preFade > 0.01 ? preFade : 0);
@@ -1031,7 +1131,7 @@ class SectionFlowMap {
     r.drawVertexLabels(preFade);
     r.curve(pts, C.ink, 2, 0.3 * preFade);
 
-    // Step 0: show flow map — convex combination
+    // Step 0: show flow map with animated interpolation
     const fmT = a.e(0);
     if (fmT > 0 && preFade > 0) {
       const o = fmT * preFade;
@@ -1041,28 +1141,8 @@ class SectionFlowMap {
       r.dot(psiST, C.teal, 7, o);
       r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 24, psiST[1] - 14], { color: C.teal, size: 17, opacity: o });
 
-      // Draw the secant line from xs through xt to psiST on the simplex
-      r.dashedLine(xs, psiST, C.cloud, 1.5, o * 0.4);
-
-      // X_{s,t} = xt lies on this line — show it as the convex combination
-      r.dot(xt, C.gold, 7, o);
-      r.mathLabel('X\u209B,\u209C', [xt[0] + 18, xt[1] - 12], { color: C.gold, size: 18, opacity: o });
-
-      // Show that xt sits on the line between xs and psiST
-      r.curve([xs, psiST], C.cloud, 1.5, 0.25 * o);
-    }
-
-    // Step 1: animate the interpolation
-    const intT = a.e(1);
-    if (intT > 0 && preFade > 0) {
-      const o = intT * preFade;
-      r.dot(xs, C.maroon, 6, preFade);
-      r.dot(psiST, C.teal, 7, preFade);
-      r.mathLabel('x\u209B', [xs[0] + 16, xs[1] + 2], { color: C.maroon, size: 17, opacity: preFade });
-      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 24, psiST[1] - 14], { color: C.teal, size: 17, opacity: preFade });
-
       // Line from xs to psiST
-      r.curve([xs, psiST], C.cloud, 1.5, 0.3 * preFade);
+      r.curve([xs, psiST], C.cloud, 1.5, 0.3 * o);
 
       // Moving dot along the interpolation line between xs and psiST
       const pingPong = (Math.sin(performance.now() / 1500) + 1) / 2;
@@ -1070,13 +1150,16 @@ class SectionFlowMap {
       const movPos = lerp2(xs, psiST, beta);
       r.dot(movPos, C.gold, 6, o);
 
+      // X_{s,t} label on the moving dot
+      r.mathLabel('X\u209B,\u209C', [xt[0] + 18, xt[1] - 12], { color: C.gold, size: 18, opacity: o });
+
       // Show xt on the line
       r.dot(xt, C.maroon, 5, o * 0.7);
       r.mathLabel('x\u209C', [xt[0] - 16, xt[1] + 2], { color: C.maroon, size: 16, opacity: o * 0.5 });
     }
 
-    // Step 2: flashlight / shadow animation
-    const shadowT = a.e(2);
+    // Step 1: flashlight / shadow animation
+    const shadowT = a.e(1);
     if (shadowT > 0) {
       const ctx = r.ctx;
 
@@ -1159,14 +1242,6 @@ class SectionFlowMap {
       ctx.fill();
       ctx.restore();
 
-      // ψ dot and label
-      r.dot(psiCur, C.gold, 6, shadowT);
-      r.mathLabel('\u03C8\u209B,\u209C', [psiCur[0] + 16, psiCur[1] - 12],
-        { color: C.gold, size: 16, opacity: shadowT });
-
-      // x_t dot on the trajectory (the "source of light")
-      r.dot(xCur, C.gold, 5, shadowT);
-
       // Faint dashed connection line
       r.dashedLine(xCur, psiCur, C.gold, 1, shadowT * 0.3);
 
@@ -1175,8 +1250,18 @@ class SectionFlowMap {
 
       // x_s anchor
       r.dot(xs, C.maroon, 4, shadowT * 0.5);
-      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4],
+      r.mathLabelSub('x', 's', [xs[0] + 8, xs[1] + 4],
         { color: C.maroon, size: 15, opacity: shadowT * 0.4 });
+
+      // ψ_{s,t} dot and label (drawn on top of trajectory)
+      r.dot(psiCur, C.gold, 6, shadowT);
+      r.mathLabelSub('\u03C8', 's,t', [psiCur[0] + 10, psiCur[1] - 14],
+        { color: C.gold, size: 16, opacity: shadowT });
+
+      // x_t dot + label on the trajectory (drawn last so it's on top)
+      r.dot(xCur, C.gold, 6, shadowT);
+      r.mathLabelSub('x', 't', [xCur[0] + 10, xCur[1] - 16],
+        { color: C.gold, size: 16, opacity: shadowT });
     }
   }
 }
@@ -1246,17 +1331,17 @@ class SectionPSD {
     const t0 = a.e(0);
     if (t0 > 0) {
       r.dot(xs, C.maroon, 5, t0); r.dot(xu, C.maroon, 5, t0); r.dot(xt, C.maroon, 5, t0);
-      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
-      r.mathLabel('x\u1D64', [xu[0] + 14, xu[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
-      r.mathLabel('x\u209C', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 's', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 'u', [xu[0] + 14, xu[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 't', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
 
       // Secant lines from trajectory to simplex
       r.dashedLine(xs, psiSU, C.teal, 1.5, t0 * 0.5);
       r.dashedLine(xu, psiUT, C.green2, 1.5, t0 * 0.5);
       r.dot(psiSU, C.teal, 5, t0);
       r.dot(psiUT, C.green2, 5, t0);
-      r.mathLabel('\u03C8\u209B,\u1D64', [psiSU[0] + 16, psiSU[1] - 12], { color: C.teal, size: 16, opacity: t0 });
-      r.mathLabel('\u03C8\u1D64,\u209C', [psiUT[0] + 16, psiUT[1] - 12], { color: C.green2, size: 16, opacity: t0 });
+      r.mathLabelSub('\u03C8', 's,u', [psiSU[0] + 16, psiSU[1] - 12], { color: C.teal, size: 16, opacity: t0 });
+      r.mathLabelSub('\u03C8', 'u,t', [psiUT[0] - 40, psiUT[1] - 12], { color: C.green2, size: 16, opacity: t0 });
     }
 
     // Step 1: show convex combination -> psi_{s,t}
@@ -1273,7 +1358,7 @@ class SectionPSD {
 
       // psi_{s,t} = convex combination of psiSU and psiUT, on the simplex
       r.dot(psiST, C.gold, 7, t1);
-      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0], psiST[1] - 16], { color: C.gold, size: 17, opacity: t1 });
+      r.mathLabelSub('\u03C8', 's,t', [psiST[0], psiST[1] - 16], { color: C.gold, size: 17, opacity: t1 });
 
       // Secant from xs through xt to psiST
       r.dashedLine(xs, psiST, C.gold, 1.5, 0.3 * t1);
@@ -1313,8 +1398,8 @@ class SectionLSD {
     if (t0 > 0) {
       r.dot(xs, C.maroon, 5, t0);
       r.dot(xt, C.maroon, 5, t0);
-      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
-      r.mathLabel('x\u209C', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 's', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 't', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
 
       // Show trajectory from xs to xt highlighted
       r.curve(pts.slice(xsIdx, xtIdx + 1), C.maroon, 2.5, 0.6 * t0);
@@ -1322,27 +1407,108 @@ class SectionLSD {
       // ψ_{t,t} — instantaneous denoiser at xt (tangent projection)
       r.dashedLine(xt, psiTT, C.teal, 1.5, 0.5 * t0);
       r.dot(psiTT, C.teal, 6, t0);
-      r.mathLabel('\u03C8\u209C,\u209C', [psiTT[0] + 18, psiTT[1] - 12], { color: C.teal, size: 16, opacity: t0 });
+      r.mathLabelSub('\u03C8', 't,t', [psiTT[0] + 18, psiTT[1] - 12], { color: C.teal, size: 16, opacity: t0 });
 
       // ψ_{s,t} from secant xs→xt
       r.dashedLine(xs, psiST, C.cloud, 1.5, 0.3 * t0);
       r.dot(psiST, C.gold, 6, t0);
-      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] - 20, psiST[1] - 14], { color: C.gold, size: 16, opacity: t0 });
+      r.mathLabelSub('\u03C8', 's,t', [psiST[0] - 20, psiST[1] - 14], { color: C.gold, size: 16, opacity: t0 });
 
       // Arrow from psiTT to psiST (the correction term)
       r.arrow(psiTT, psiST, C.cloud, 1.5, t0 * 0.5);
     }
 
-    // Step 1: logit space target
+    // Step 1: curve ψ_{s,t}(x_s) as t varies, showing tangent parallelism
     const t1 = a.e(1);
     if (t1 > 0) {
+      // Compute the curve of ψ_{s,t}(x_s) for varying t
+      const nSamples = 60;
+      const curveStart = LOSS_S_PARAM + 0.04;
+      const curveEnd = 0.65;
+      const psiCurvePts = [];
+      for (let i = 0; i <= nSamples; i++) {
+        const tParam = lerp(curveStart, curveEnd, i / nSamples);
+        const xTmp = r.trajectoryPoint(tParam);
+        psiCurvePts.push(r.psiFromSecant(xs, xTmp, insideFrac));
+      }
+
+      // Draw the full curve on the simplex
+      r.curveSmooth(psiCurvePts, C.gold, 2.5, 0.45 * t1);
+
+      // Animated sweep parameter
+      const sweep = (Math.sin(performance.now() / 2800 - Math.PI / 2) + 1) / 2;
+      const curIdx = Math.round(sweep * nSamples);
+      const curTParam = lerp(curveStart, curveEnd, curIdx / nSamples);
+      const curXt = r.trajectoryPoint(curTParam);
+      const curPsiST = psiCurvePts[curIdx];
+
+      // ψ_{t,t}: instantaneous denoiser at current x_t
+      const curTanVec = r.trajectoryTangent(curTParam);
+      const curPsiTT = r.psiFromSecant(curXt,
+        [curXt[0] + curTanVec[0], curXt[1] + curTanVec[1]], insideFrac);
+
+      // Tangent direction via finite differences of the curve
+      const di = 3;
+      const prevI = Math.max(0, curIdx - di);
+      const nextI = Math.min(nSamples, curIdx + di);
+      const tanDx = psiCurvePts[nextI][0] - psiCurvePts[prevI][0];
+      const tanDy = psiCurvePts[nextI][1] - psiCurvePts[prevI][1];
+      const tanMag = Math.hypot(tanDx, tanDy);
+
+      // Draw xs
+      r.dot(xs, C.maroon, 5, t1);
+      r.mathLabelSub('x', 's', [xs[0] + 14, xs[1] + 4],
+        { color: C.maroon, size: 16, opacity: t1 });
+
+      // Draw current x_t on trajectory
+      r.dot(curXt, C.maroon, 4, t1 * 0.6);
+      r.mathLabelSub('x', 't', [curXt[0] + 10, curXt[1] - 14],
+        { color: C.maroon, size: 15, opacity: t1 * 0.6 });
+
+      // Faint dashed secant from xs to ψ_{s,t}
+      r.dashedLine(xs, curPsiST, C.cloud, 1, 0.2 * t1);
+
+      // Highlight trajectory segment from xs to current xt
+      const curXtIdx = trajIdxFromParam(pts, curTParam);
+      r.curve(pts.slice(xsIdx, curXtIdx + 1), C.maroon, 2, 0.35 * t1);
+
+      // ψ_{s,t} dot and label
+      r.dot(curPsiST, C.gold, 6, t1);
+      r.mathLabelSub('\u03C8', 's,t', [curPsiST[0] - 28, curPsiST[1] - 14],
+        { color: C.gold, size: 16, opacity: t1 });
+
+      // ψ_{t,t} dot and label
+      r.dot(curPsiTT, C.teal, 6, t1);
+      r.mathLabelSub('\u03C8', 't,t', [curPsiTT[0] + 14, curPsiTT[1] - 14],
+        { color: C.teal, size: 16, opacity: t1 });
+
+      // Dashed line from ψ_{s,t} to ψ_{t,t} (the difference direction)
+      r.dashedLine(curPsiST, curPsiTT, C.teal, 1.5, t1 * 0.45);
+
+      // Tangent arrow at ψ_{s,t} (numerically computed, shows ∂_t ψ_{s,t})
+      if (tanMag > 1e-4) {
+        const arrowLen = 45;
+        const tanEnd = [
+          curPsiST[0] + (tanDx / tanMag) * arrowLen,
+          curPsiST[1] + (tanDy / tanMag) * arrowLen
+        ];
+        r.arrow(curPsiST, tanEnd, C.maroon, 2.5, t1 * 0.75);
+        // Label the tangent arrow
+        r.mathLabel('\u2202\u209C\u03C8', [tanEnd[0] + 12, tanEnd[1] + 2],
+          { color: C.maroon, size: 14, opacity: t1 * 0.75 });
+      }
+    }
+
+    // Step 2: logit space target
+    const t2 = a.e(2);
+    if (t2 > 0) {
       r.dot(xs, C.maroon, 5); r.dot(xt, C.maroon, 5);
       r.dot(psiTT, C.teal, 6); r.dot(psiST, C.gold, 6);
 
       // Highlight the target distribution with a glow
       const glow = 0.15 + 0.1 * Math.sin(performance.now() / 800);
-      r.dot(psiST, C.gold, 14, glow * t1);
-      r.mathLabel('Softmax target', [psiST[0], psiST[1] + 22], { color: C.gold, size: 15, opacity: t1, italic: false });
+      r.dot(psiST, C.gold, 14, glow * t2);
+      r.mathLabel('Softmax target', [psiST[0], psiST[1] + 22], { color: C.gold, size: 15, opacity: t2, italic: false });
     }
   }
 }
@@ -1386,9 +1552,9 @@ class SectionESD {
       r.dot(xs2, C.maroon, 5, t0 * 0.7);
       r.dot(xt, C.maroon, 5, t0);
 
-      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
-      r.mathLabel("x\u209B'", [xs2[0] + 14, xs2[1] + 10], { color: C.maroon, size: 16, opacity: t0 * 0.7 });
-      r.mathLabel('x\u209C', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 's', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', "s'", [xs2[0] + 14, xs2[1] + 10], { color: C.maroon, size: 16, opacity: t0 * 0.7 });
+      r.mathLabelSub('x', 't', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
 
       // Both project to similar psi on simplex (invariance)
       r.dashedLine(xs, psiST, C.teal, 1.5, 0.4 * t0);
@@ -1400,12 +1566,12 @@ class SectionESD {
       // Show they converge to same endpoint
       r.curve([psiS2T, psiST], C.teal, 2, 0.4 * t0);
 
-      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] + 18, psiST[1] - 12], { color: C.teal, size: 16, opacity: t0 });
+      r.mathLabelSub('\u03C8', 's,t', [psiST[0] + 18, psiST[1] - 12], { color: C.teal, size: 16, opacity: t0 });
 
       // ψ_{s,s} for Eulerian identity
       r.dashedLine(xs, psiSS, C.cloud, 1.5, 0.3 * t0);
       r.dot(psiSS, C.cloud, 5, t0 * 0.5);
-      r.mathLabel('\u03C8\u209B,\u209B', [psiSS[0] + 18, psiSS[1] + 10], { color: C.cloud, size: 15, opacity: t0 * 0.5 });
+      r.mathLabelSub('\u03C8', 's,s', [psiSS[0] + 18, psiSS[1] + 10], { color: C.cloud, size: 15, opacity: t0 * 0.5 });
     }
 
     // Step 1: logit space
@@ -1416,7 +1582,7 @@ class SectionESD {
 
       const glow = 0.15 + 0.1 * Math.sin(performance.now() / 800);
       r.dot(psiST, C.teal, 14, glow * t1);
-      r.mathLabel('\u03C8\u209B,\u209C', [psiST[0] + 18, psiST[1] - 12], { color: C.teal, size: 16, opacity: t1 });
+      r.mathLabelSub('\u03C8', 's,t', [psiST[0] + 18, psiST[1] - 12], { color: C.teal, size: 16, opacity: t1 });
     }
   }
 }
@@ -1450,9 +1616,9 @@ class SectionDPSD {
     const t0 = a.e(0);
     if (t0 > 0) {
       r.dot(xs, C.maroon, 5, t0); r.dot(xu, C.maroon, 5, t0); r.dot(xt, C.maroon, 5, t0);
-      r.mathLabel('x\u209B', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
-      r.mathLabel('x\u1D64', [xu[0] + 14, xu[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
-      r.mathLabel('x\u209C', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 's', [xs[0] + 14, xs[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 'u', [xu[0] + 14, xu[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
+      r.mathLabelSub('x', 't', [xt[0] - 16, xt[1] + 4], { color: C.maroon, size: 16, opacity: t0 });
 
       r.dot(psiSU, C.teal, 5, t0);
       r.dot(psiUT, C.green2, 5, t0);

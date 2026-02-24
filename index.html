@@ -84,19 +84,20 @@
             To generate discrete data we need a process that transports a
             continuous base distribution \(\rho_0\) in \(\mathbb{R}^K\) to the discrete
             target \(\rho_1\) supported on the simplex vertices.
+            We construct this transport via a simple linear interpolation.
           </p>
           <p>
-            Let \(x_0 \sim \rho_0\) be a base sample and
-            \(x_1 \in \{e_1, \dots, e_K\}\) a data token drawn from \(\rho_1\).
+            Let \(I_0 \sim \rho_0\) be a base sample and
+            \(I_1 \in \{e_1, \dots, e_K\}\) a data token drawn from \(\rho_1\).
             The <strong>stochastic interpolant</strong> linearly blends the two:
           </p>
           <p class="display-math">
-            \[I_t = (1 - t)\, x_0 + t\, x_1, \qquad t \in [0, 1]\]
+            \[I_t = (1 - t)\, I_0 + t\, I_1, \qquad t \in [0, 1].\]
           </p>
         </div>
         <div class="scroll-step" data-step="1">
           <p>
-            Each base&ndash;data pair \((x_0, x_1)\) traces a straight line
+            Each base&ndash;data pair \((I_0, I_1)\) traces a straight line
             from the base distribution toward a simplex vertex. The interpolant
             \(I_t\) slides along this line as \(t\) increases.
             At \(t{=}0\) we recover the base; at \(t{=}1\) we arrive
@@ -107,18 +108,15 @@
         <div class="scroll-step" data-step="2">
           <h3>The Velocity Field</h3>
           <p>
-            Each interpolant has slope \(\dot{I}_t = x_1 - x_0\).
+            We want a generative ODE with drift \(b_s\) whose marginals match those of the
+            interpolant. Each interpolant has slope \(\dot{I}_s = I_1 - I_0\).
             Pick a point \(x_s\) and look at all the interpolants
             passing through it at time \(s\).
-            The velocity field \(b_s(x) = \mathbb{E}[\dot{I}_s \mid I_s = x]\)
-            is the <strong>conditional average</strong> of these slopes.
+            The right velocity field is the <strong>conditional average</strong>
+            of these slopes:
           </p>
-          <p>
-            The slopes at \(x_s\) each point toward their target vertex.
-            Their <strong style="color: var(--gold)">conditional average</strong>
-            points directly toward \(\psi_{s,s}\)&mdash;the
-            <em>instantaneous denoiser</em>&mdash;with weights given by the posterior
-            \(p_i = \mathbb{P}(x_1 = e_i \mid I_s = x_s)\).
+          <p class="display-math">
+            \[b_s(x_s) = \mathbb{E}[\dot{I}_s \mid I_s = x_s]\]
           </p>
         </div>
       </div>
@@ -128,31 +126,31 @@
         <div class="scroll-step" data-step="0">
           <h2>The Instantaneous Denoiser</h2>
           <p>
-            We saw that the velocity field at \(x_s\) points toward
-            \(\psi_{s,s}\). This is the <strong style="color: var(--teal)">instantaneous
-            denoiser</strong>&mdash;the conditional expectation of the clean data:
+            The <strong style="color: var(--teal)">instantaneous
+            denoiser</strong> is the conditional expectation of the
+            clean data given the noisy observation:
           </p>
           <p class="display-math">
-            \[\psi_{s,s}(x) = \mathbb{E}[x_1 \mid I_s = x]\]
+            \[\begin{aligned}\psi_{s,s}(x_s) &= \mathbb{E}[I_1 \mid I_s = x_s] \\ &= \sum_{i=1}^{K} \underbrace{\mathbb{P}(I_1 = e_i \mid I_s = x_s)}_{p_i}\, e_i.\end{aligned}\]
           </p>
           <p>
-            The weight on each vertex \(e_i\) is the posterior
-            \(p_i = \mathbb{P}(x_1 = e_i \mid I_s = x)\), exactly the
-            proportion of interpolants through \(x\) that target vertex \(i\).
+            The velocity field \(b_s(x_s)\) points directly toward the
+            instantaneous denoiser \(\psi_{s,s}(x_s)\).
+            <!-- Each slope targets a vertex; their
+            <strong style="color: var(--gold)">conditional average</strong>
+            targets the denoiser&mdash;the probability-weighted centre of
+            those vertices. -->
           </p>
         </div>
         <div class="scroll-step" data-step="1">
           <p>
-            Since each weight is non-negative and they sum to one, the denoiser
-            is always a valid probability distribution&mdash;it lives on the simplex
-            by construction:
+            Since the weights \(p_i\) are non-negative and sum to one,
+            \(\psi_{s,s}\) is a convex combination of vertices and therefore
+            always a valid probability distribution on the simplex.
+            This geometric fact means we can learn the instantaneous denoiser with a cross-entropy loss:
           </p>
           <p class="display-math">
-            \[\psi_{s,s}(x) = \sum_{i=1}^{K} \mathbb{P}(I_1 = e_i \mid I_s = x)\, e_i = \mathbb{E}[I_1 \mid I_s = x]\]
-          </p>
-          <p>
-            This is simply the conditional expectation of the clean data
-            given the noisy observation.
+            \[\psi_s = \argmin_{\hat \psi_s}\mathbb{E}\left[ -\sum_{k=1}^K I_1^{(k)} \log \hat{\psi}_{s,s}^{(k)}(I_s) \right].\]
           </p>
         </div>
       </div>
@@ -162,10 +160,16 @@
         <div class="scroll-step" data-step="0">
           <h2>The Mean Denoiser</h2>
           <p>
-            The generative ODE traces a trajectory from random noise \(x_0\)
+            The generative ODE
+          </p>
+          <p class="display-math">
+            \[\dot x_s = b_s(x_s), \qquad x_0 \sim \rho_0,\]
+          </p>
+          <p>
+            traces a trajectory from random noise \(x_0\)
             to a data point \(x_1\) (a simplex vertex).
             We mark two points along the trajectory: an earlier time \(x_s\)
-            and a later time \(x_t\). The tangent at \(x_s\) projects onto
+            and a later time \(x_t\). The tangent \(b_s(x_s)\) at \(x_s\) projects onto
             the simplex at the instantaneous denoiser \(\psi_{s,s}\).
           </p>
         </div>
@@ -177,20 +181,20 @@
             denoisers along the path:
           </p>
           <p class="display-math">
-            \[\psi_{s,t}(x_s) = \int_s^t w(u)\,\mathbb{E}[I_1 \mid I_u = x_u]\, du\]
+            \[\psi_{s,t}(x_s) = \int_s^t w(u)\,\underbrace{\mathbb{E}[I_1 \mid I_u = x_u]}_{\psi_{u,u}(x_u)}\, du\]
           </p>
           <p>
-            <strong>Key insight:</strong> Since each \(\mathbb{E}[I_1 \mid I_u = x_u]\) is on the simplex,
-            and \(w(u)\) integrates to 1, the mean denoiser \(\psi_{s,t}\) is also
-            always on the simplex. This enables cross-entropy losses for flow map training.
+            Since each \(\mathbb{E}[I_1 \mid I_u = x_u]\) is on the simplex and
+            \(w(u)\) is a non-negative weight function that integrates to 1 over
+            \([s,t]\), the mean denoiser is a convex
+            combination of simplex points&mdash;so \(\psi_{s,t}(x_s) \in \Delta^{K-1}\) also lives on the simplex.
           </p>
         </div>
         <div class="scroll-step" data-step="2">
           <p>
-            The secant between \(x_s\) and \(x_t\) on the trajectory corresponds
-            to the mean denoiser \(\psi_{s,t}\) on the simplex. The projection
-            from the trajectory onto the simplex is the geometric bridge that
-            connects the flow map to discrete losses.
+            Geometrically, just as the tangent at \(x_s\) projects to the instantaneous denoiser
+            \(\psi_{s,s}\), the secant from \(x_s\) to \(x_t\) projects to the mean
+            denoiser \(\psi_{s,t}\) on the simplex.
           </p>
         </div>
       </div>
@@ -201,36 +205,33 @@
           <h2>The Discrete Flow Map</h2>
           <p>
             The flow map \(X_{s,t}\) jumps directly from time \(s\) to time \(t\)
-            along the generative trajectory. We parameterize it as a
-            <strong>convex combination</strong> of the current state and
+            along the ODE trajectory \((x_u)_{u \in [0,1]}\). Since the true flow map
+            is a <strong>convex combination</strong> of the current state and
             the mean denoiser:
           </p>
           <p class="display-math">
-            \[X_{s,t}(x_s) = \frac{1-t}{1-s}\,x_s + \frac{t-s}{1-s}\,\psi_{s,t}(x_s)\]
+            \[X_{s,t}(x_s) = \tfrac{1-t}{1-s}\,x_s + \tfrac{t-s}{1-s}\,\psi_{s,t}(x_s),\]
+          </p>
+          <p>
+            we parameterize our map \(\hat X_{s,t}\) in terms of a neural network \(\hat \psi_{s,t} \in \Delta^{K-1}\) in the same way. 
+          </p>
+          <p>
+            At \(t = 1\), the map reduces to the mean denoiser itself:
+            \(X_{s,1}(x_s) = \psi_{s,1}(x_s)\).
           </p>
         </div>
         <div class="scroll-step" data-step="1">
           <p>
-            Since \(\psi_{s,t}\) lives on the simplex, the flow map output is a
-            convex combination of \(x_s\) and a point on the simplex.
-            At \(t = 1\), the map yields the full generation:
-            \(X_{s,1}(x_s) = \psi_{s,1}(x_s)\), a point on the simplex.
-          </p>
-          <p>
-            This parameterization is the key to our framework: it replaces
-            unconstrained Euclidean regression with geometrically consistent
-            objectives on the simplex.
-          </p>
-        </div>
-        <div class="scroll-step" data-step="2">
-          <p>
-            As \(x_t\) evolves along the trajectory, the denoiser
-            \(\psi_{s,t}\) tracks it like a <em>shadow</em> cast onto
+            As \(x_t\) evolves along the trajectory, the mean denoiser
+            \(\psi_{s,t}(x_s)\) tracks it like a <em>shadow</em> cast onto
             the simplex&mdash;always inside the triangle.
           </p>
           <p>
-            The flow map lives outside; its shadow lives on the simplex.
-            Training the denoiser is training the shadow.
+            The flow map need not lie on the simplex, but the mean denoiser
+            is always a valid probability distribution&mdash;so we can train it
+            with KL divergence losses, respecting the geometry of the simplex.
+            We next describe four self-consistency conditions that provide
+            training targets for \(\psi_{s,t}\).
           </p>
         </div>
       </div>
@@ -245,20 +246,22 @@
             then from \(u\) to \(t\).
           </p>
           <p>
-            In terms of the mean denoiser, this becomes a convex decomposition:
+            This is equivalent to requiring the following convex decomposition of the mean denoiser:
           </p>
           <p class="display-math">
-            \[\psi_{s,t}(x_s) = \alpha_{s,u,t}\,\psi_{s,u}(x_s) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x_s))\]
+            \[\psi_{s,t}(x_s) = \alpha_{s,u,t}\,\psi_{s,u}(x_s) + (1-\alpha_{s,u,t})\,\psi_{u,t}(X_{s,u}(x_s)),\]
+            where \(\alpha_{s,u,t} \in [0,1]\) is a time-dependent weight.
           </p>
         </div>
         <div class="scroll-step" data-step="1">
           <p>
-            Since both sides are probability distributions (points on the simplex),
+            Since both sides of the above equation are probability distributions 
+            (the right-side is a convex combination of points on the simplex),
             we can enforce this identity via <strong>KL divergence</strong> rather
             than L\(^2\) regression:
           </p>
           <p class="display-math">
-            \[\mathcal{L}_{\text{PSD}} = \mathbb{E}\Big[D_{\text{KL}}\big(\text{sg}[\alpha\,\hat\psi_{s,u} + \beta\,\hat\psi_{u,t}(\hat X_{s,u})]\;\|\;\hat\psi_{s,t}\big)\Big]\]
+            \[\mathcal{L}_{\text{PSD}} = \mathbb{E}\Big[D_{\text{KL}}\big(\text{sg}[\alpha\,\hat\psi_{s,u} + (1-\alpha)\,\hat\psi_{u,t}(\hat X_{s,u})]\;\|\;\hat\psi_{s,t}\big)\Big].\]
           </p>
         </div>
       </div>
@@ -270,13 +273,25 @@
           <p>
             The <strong>Lagrangian perspective</strong> requires that the flow
             endpoint velocity matches the instantaneous drift. In terms of the
-            mean denoiser:
+            mean denoiser, this is equivalent to:
           </p>
           <p class="display-math">
-            \[\psi_{s,t}(x_s) = \psi_{t,t}(x_t) - C_{s,t}\,\frac{\partial}{\partial t}\psi_{s,t}(x_s)\]
+            \[\psi_{s,t}(x_s) = \psi_{t,t}(x_t) - C_{s,t}\,\tfrac{\partial}{\partial t}\psi_{s,t}(x_s),\]
+            for some time-dependent constant \(C_{s,t}\).
           </p>
         </div>
         <div class="scroll-step" data-step="1">
+          <p>
+            As \(t\) varies, the mean denoiser \(\psi_{s,t}(x_s)\) traces a
+            curve on the simplex. The LSD identity implies that the tangent
+            to this curve, \(\partial_t \psi_{s,t}(x_s)\), is always parallel
+            to the direction \(\psi_{s,t}(x_s) - \psi_{t,t}(x_t)\):
+          </p>
+          <p class="display-math">
+            \[\partial_t \psi_{s,t}(x_s) \;\propto\; \psi_{t,t}(x_t) - \psi_{s,t}(x_s)\]
+          </p>
+        </div>
+        <div class="scroll-step" data-step="2">
           <p>
             To obtain a valid target distribution, we derive an equivalent
             condition in <em>logit space</em>:
