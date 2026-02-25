@@ -81,15 +81,20 @@
         <div class="scroll-step" data-step="0">
           <h2>The Stochastic Interpolant</h2>
           <p>
-            To generate discrete data we need a process that transports a
-            continuous base distribution \(\rho_0\) in \(\mathbb{R}^K\) to the discrete
-            target \(\rho_1\) supported on the simplex vertices.
-            We construct this transport via a simple linear interpolation.
+            To generate discrete data we want an ODE
+          </p>
+          <p class="display-math">
+            \[\dot x_s = b_s(x_s), \qquad x_0 \sim \rho_0,\]
           </p>
           <p>
-            Let \(I_0 \sim \rho_0\) be a base sample and
-            \(I_1 \in \{e_1, \dots, e_K\}\) a data token drawn from \(\rho_1\).
-            The <strong>stochastic interpolant</strong> linearly blends the two:
+            that transports a continuous base distribution \(\rho_0\) in \(\mathbb{R}^K\) to the discrete
+            target \(\rho_1\) supported on the simplex vertices. How do we learn the velocity field \(b_s\)?
+          </p>
+          <p>
+            We need training pairs that tell us where the flow should go at each time. The 
+            <strong>stochastic interpolant</strong> provides exactly this: 
+            given a base sample \(I_0 \sim \rho_0\) and a data token
+            \(I_1 \in \{e_1, \dots, e_K\}\) drawn from \(\rho_1\), it defines a straight-line path between them:
           </p>
           <p class="display-math">
             \[I_t = (1 - t)\, I_0 + t\, I_1, \qquad t \in [0, 1].\]
@@ -108,15 +113,11 @@
         <div class="scroll-step" data-step="2">
           <h3>The Velocity Field</h3>
           <p>
-            We want a generative ODE with drift \(b_s\) whose marginals match those of the
-            interpolant. Each interpolant has slope \(\dot{I}_s = I_1 - I_0\).
-            Pick a point \(x_s\) and look at all the interpolants
-            passing through it at time \(s\).
-            The right velocity field is the <strong>conditional average</strong>
-            of these slopes:
+            The interpolant tells us the <em>desired direction</em> at every point. Each interpolant has slope \(\dot{I}_s = I_1 - I_0\).
+            But many interpolants pass through any fixed point \(x_s\). The right velocity field averages over all of them:
           </p>
           <p class="display-math">
-            \[b_s(x_s) = \mathbb{E}[\dot{I}_s \mid I_s = x_s]\]
+            \[b_s(x_s) = \mathbb{E}[\dot{I}_s \mid I_s = x_s].\]
           </p>
         </div>
       </div>
@@ -143,6 +144,7 @@
           </p>
         </div>
         <div class="scroll-step" data-step="1">
+          <h2>Diagonal Cross-Entropy</h2>
           <p>
             Since the weights \(p_i\) are non-negative and sum to one,
             \(\psi_{s,s}\) is a convex combination of vertices and therefore
@@ -150,7 +152,7 @@
             This geometric fact means we can learn the instantaneous denoiser with a cross-entropy loss:
           </p>
           <p class="display-math">
-            \[\psi_s = \argmin_{\hat \psi_s}\mathbb{E}\left[ -\sum_{k=1}^K I_1^{(k)} \log \hat{\psi}_{s,s}^{(k)}(I_s) \right].\]
+            \[\psi_{s,s} = \argmin_{\hat \psi_{s,s}}\mathbb{E}\left[ -\sum_{k=1}^K I_1^{(k)} \log \hat{\psi}_{s,s}^{(k)}(I_s) \right].\]
           </p>
         </div>
       </div>
@@ -272,32 +274,24 @@
           <h2>Lagrangian Consistency (LSD)</h2>
           <p>
             The <strong>Lagrangian perspective</strong> requires that the flow
-            endpoint velocity matches the instantaneous drift. In terms of the
+            endpoint velocity \(\partial_t X_{s,t}(x_s)\) matches the instantaneous drift \(b_t(x_t)\). In terms of the
             mean denoiser, this is equivalent to:
           </p>
           <p class="display-math">
-            \[\psi_{s,t}(x_s) = \psi_{t,t}(x_t) - C_{s,t}\,\tfrac{\partial}{\partial t}\psi_{s,t}(x_s),\]
-            for some time-dependent constant \(C_{s,t}\).
+            \[\psi_{s,t}(x_s) = \psi_{t,t}(x_t) - C_{s,t}\,\tfrac{\partial}{\partial t}\psi_{s,t}(x_s)\]
+          </p>
+          <p>
+            This means the tangent to the curve \(\psi_{s,t}(x_s)\) is always
+            parallel to the direction \(\psi_{t,t}(x_t) - \psi_{s,t}(x_s)\).
           </p>
         </div>
         <div class="scroll-step" data-step="1">
           <p>
-            As \(t\) varies, the mean denoiser \(\psi_{s,t}(x_s)\) traces a
-            curve on the simplex. The LSD identity implies that the tangent
-            to this curve, \(\partial_t \psi_{s,t}(x_s)\), is always parallel
-            to the direction \(\psi_{s,t}(x_s) - \psi_{t,t}(x_t)\):
-          </p>
-          <p class="display-math">
-            \[\partial_t \psi_{s,t}(x_s) \;\propto\; \psi_{t,t}(x_t) - \psi_{s,t}(x_s)\]
-          </p>
-        </div>
-        <div class="scroll-step" data-step="2">
-          <p>
-            To obtain a valid target distribution, we derive an equivalent
+            The right-side of the above equation need not be a probability distribution when parametrized by arbitrary neural networks. To obtain a valid target distribution, we derive an equivalent
             condition in <em>logit space</em>:
           </p>
           <p class="display-math">
-            \[\psi_{s,t} = \text{Softmax}\!\big(z_{t,t}(x_t) - \log(\mathbf{1} + C_{s,t}(\dot z_{s,t} - \bar{\dot z}_{s,t}\mathbf{1}))\big)\]
+            \[\psi_{s,t} = \text{Softmax}\!\big(z_{t,t}(x_t) - \log(\mathbf{1} + C_{s,t}(\dot z_{s,t} - \bar{\dot z}_{s,t}\mathbf{1}))\big).\]
           </p>
           <p>
             This logit-space formulation always yields a valid probability distribution,
@@ -312,11 +306,13 @@
           <h2>Eulerian Consistency (ESD)</h2>
           <p>
             The <strong>Eulerian perspective</strong> enforces that the flow map
-            is invariant to the source time&mdash;if you re-parameterize where you
-            start, the endpoint should not change:
+            is invariant to the source time \(\partial_s (X_{s,t}(x_s)) = 0\). In terms of the mean denoiser, this is equivalent to:
           </p>
           <p class="display-math">
-            \[\frac{\partial}{\partial s}\psi_{s,t}(x) + J_x\psi_{s,t}(x)\,b_s(x) = \kappa_{s,t}\big(\psi_{s,t}(x) - \psi_{s,s}(x)\big)\]
+            \[\frac{\partial}{\partial s}(\psi_{s,t}(x_s)) = \kappa_{s,t}\big(\psi_{s,t}(x_s) - \psi_{s,s}(x_s)\big),\]
+          </p>
+          <p>
+            where \(\kappa_{s,t}\) is a time-dependent scalar.
           </p>
         </div>
         <div class="scroll-step" data-step="1">
@@ -324,13 +320,10 @@
             Again, we derive an equivalent logit-space condition:
           </p>
           <p class="display-math">
-            \[\psi_{s,t} = \text{Softmax}\!\big(z_{s,s}(x) - \log(\mathbf{1} - \kappa_{s,t}^{-1}(D_s z_{s,t} - \overline{D_s z_{s,t}}\,\mathbf{1}))\big)\]
+            \[\psi_{s,t} = \text{Softmax} \big(z_{s,s}(x) - \log(\mathbf{1} - \kappa_{s,t}^{-1}(D_s z_{s,t} - \overline{D}_s z_{s,t}\,\mathbf{1}))\big),\]
           </p>
           <p>
-            All three consistency losses&mdash;PSD, LSD, and ESD&mdash;are
-            exact objectives derived directly from the geometric definitions of the flow,
-            with no approximations.
-          </p>
+            which always yields a valid probability distribution for KL training.
         </div>
       </div>
 
@@ -343,12 +336,29 @@
             the intermediate time \(u\) yields a fourth identity:
           </p>
           <p class="display-math">
-            \[\frac{d}{du}\big[\alpha_{s,u,t}\,\psi_{s,u}(x) + \beta_{s,u,t}\,\psi_{u,t}(X_{s,u}(x))\big] = 0\]
+            \[\frac{d}{du}\big[\alpha_{s,u,t}\,\psi_{s,u}(x) + (1-\alpha_{s,u,t})\,\psi_{u,t}(X_{s,u}(x))\big] = 0.\]
           </p>
           <p>
             Setting \(u = s\) recovers ESD; setting \(u = t\) recovers LSD.
-            This unifies all three consistency rules as special cases of one
+            This unifies the previous differential consistency rules as special cases of one
             differential identity.
+          </p>
+        </div>
+      </div>
+
+      <!-- J: Loss Summary -->
+      <div class="text-section" data-section="loss-summary">
+        <div class="scroll-step" data-step="0">
+          <h2>Exact Training Objectives</h2>
+          <p>
+            All four consistency losses&mdash;PSD, LSD, ESD, and dPSD&mdash;are
+            exact objectives derived directly from the geometric definitions of the flow,
+            with no approximations.
+          </p>
+          <p>
+            Minimizing any of these losses with the diagonal cross-entropy loss, 
+            ensures the learned flow map \(\hat X_{s,t}\) matches the true flow map \(X_{s,t}\) and therefore 
+            generates the correct data distribution at \(t=1\).
           </p>
         </div>
       </div>
@@ -460,6 +470,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-  <script src="main.js"></script>
+  <script>document.write('<script src="main.js?v=' + Date.now() + '"><\/script>');</script>
 </body>
 </html>
