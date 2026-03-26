@@ -19,15 +19,37 @@
     <div class="hero__inner">
       <p class="hero__eyebrow">A framework for trajectory compression on the probability simplex</p>
       <h1 class="hero__title">Discrete Flow Maps</h1>
+
+      <div class="hero__authors">
+        <p class="hero__author-names">
+          Peter Potaptchik<sup>1,2</sup>,&nbsp;
+          Jason Yim<sup>3</sup>,&nbsp;
+          Adhi Saravanan<sup>2</sup>,&nbsp;
+          Peter Holderrieth<sup>4</sup>,&nbsp;
+          Eric Vanden-Eijnden<sup>5</sup>,&nbsp;
+          Michael&nbsp;S.&nbsp;Albergo<sup>1,6</sup>
+        </p>
+        <p class="hero__affiliations">
+          <sup>1</sup>Harvard University,&ensp;
+          <sup>2</sup>University of Oxford,&ensp;
+          <sup>3</sup>Independent,&ensp;
+          <sup>4</sup>MIT,&ensp;
+          <sup>5</sup>NYU,&ensp;
+          <sup>6</sup>Kempner Institute
+        </p>
+      </div>
+
       <div class="hero__rule"></div>
       <p class="hero__abstract">
-        The sequential nature of autoregressive next-token prediction imposes a fundamental speed
-        limit on Large Language Models. While continuous flow models offer a path to parallel generation,
-        they traditionally demand expensive iterative integration. Flow Maps bypass this bottleneck by
-        compressing generative trajectories into single-step mappings. However, standard formulations rely
-        on Euclidean regression losses that are geometrically ill-suited for discrete data. We resolve this
-        conflict with <em>Discrete Flow Maps</em>, a framework that reconciles trajectory compression with
-        the geometry of the probability simplex.
+        <strong>Abstract.</strong> The sequential nature of autoregressive next-token prediction imposes a fundamental speed
+        limit on Large Language Models. While continuous flow models offer a path to parallel generation, they
+        traditionally demand expensive iterative integration. Flow Maps bypass this bottleneck by compressing
+        generative trajectories into single-step mappings&mdash;theoretically enabling the generation of full text sequences
+        from noise in a single forward pass. However, standard formulations rely on Euclidean regression losses that
+        are geometrically ill-suited for discrete data. In this work, we resolve this conflict with <em>Discrete Flow Maps</em>, a
+        framework that reconciles trajectory compression with the geometry of the probability simplex. We recast
+        standard flow map training for the discrete domain, aligning the training dynamics with the discrete nature of
+        language.
       </p>
       <nav class="hero__links">
         <a href="#" class="hero__link">ArXiv</a>
