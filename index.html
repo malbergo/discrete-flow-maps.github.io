@@ -16,7 +16,7 @@
   <!--  HERO                                                  -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <header class="hero">
-    <div class="hero__inner">
+    <div class="hero__top">
       <p class="hero__eyebrow">A framework for trajectory compression on the probability simplex</p>
       <h1 class="hero__title">Discrete Flow Maps</h1>
 
@@ -39,7 +39,16 @@
         </p>
       </div>
 
-      <div class="hero__rule"></div>
+      <nav class="hero__links">
+        <a href="#" class="hero__link">ArXiv</a>
+        <a href="#" class="hero__link">Code</a>
+        <a href="#" class="hero__link">BibTeX</a>
+      </nav>
+    </div>
+
+    <div class="hero__rule"></div>
+
+    <div class="hero__split">
       <p class="hero__abstract">
         <strong>Abstract.</strong> The sequential nature of autoregressive next-token prediction imposes a fundamental speed
         limit on Large Language Models. While continuous flow models offer a path to parallel generation, they
@@ -51,15 +60,15 @@
         standard flow map training for the discrete domain, aligning the training dynamics with the discrete nature of
         language.
       </p>
-      <nav class="hero__links">
-        <a href="#" class="hero__link">ArXiv</a>
-        <a href="#" class="hero__link">Code</a>
-        <a href="#" class="hero__link">BibTeX</a>
-      </nav>
-      <div class="hero__scroll-hint">
-        <span>Scroll to explore</span>
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="hero__figure">
+        <img src="dfm_fewstep_lm1b_bars.png" alt="Few-step generation perplexity on LM1B: DFM significantly outperforms baselines at all step counts">
+        <p class="hero__figure-caption">Few-step generation perplexity on LM1B</p>
       </div>
+    </div>
+
+    <div class="hero__scroll-hint">
+      <span>Scroll to explore</span>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
   </header>
 
@@ -461,13 +470,134 @@
   <!--  RESULTS                                               -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <section class="results-section">
-    <div class="results-inner">
+    <div class="results-inner results-inner--wide">
       <h2>Experiments</h2>
       <p>
-        We validate that respecting the geometry of the simplex allows us to
-        surpass previous state-of-the-art results in discrete flow modeling.
-        Results coming soon.
+        We evaluate DFMs on One Billion Word (LM1B) and OpenWebText (OWT),
+        comparing against recent accelerated discrete diffusion baselines.
+        DFMs substantially outperform all baselines in the few-step regime.
       </p>
+
+      <!-- Side-by-side: Table 1 + Table 2 -->
+      <div class="results-tables tables-row">
+        <div class="tables-row__col">
+          <h3>Table 1: Few-Step Comparison</h3>
+          <p class="table-caption">Gen. PPL (&darr;) and entropy at 1, 2, 4 NFEs. Dataset PPLs: 53.83 (LM1B), 14.49 (OWT).</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Dataset</th><th>Method</th><th>Metric</th><th>1</th><th>2</th><th>4</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>LM1B</td><td>Duo + DCD</td><td>PPL</td><td>180.02</td><td>146.67</td><td>118.40</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>3.14</td><td>3.65</td><td>3.94</td></tr>
+                <tr><td></td><td>Duo + Di4C</td><td>PPL</td><td>292.94</td><td>247.69</td><td>150.67</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>3.79</td><td>3.87</td><td>4.00</td></tr>
+                <tr><td></td><td>MDLM + SDTT</td><td>PPL</td><td>1429</td><td>602.14</td><td>241.01</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>4.31</td><td>4.28</td><td>4.28</td></tr>
+                <tr><td></td><td>MDLM + Di4C</td><td>PPL</td><td>1217</td><td>621.59</td><td>247.32</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>4.38</td><td>4.37</td><td>4.00</td></tr>
+                <tr class="ours"><td></td><td><strong>DFM (PSD)</strong></td><td>PPL</td><td>94.08</td><td>87.42</td><td>78.89</td></tr>
+                <tr class="ours"><td></td><td></td><td>Ent.</td><td>4.06</td><td>4.08</td><td>4.10</td></tr>
+                <tr class="ours"><td></td><td><strong>DFM (ESD)</strong></td><td>PPL</td><td><strong>68.11</strong></td><td><strong>77.60</strong></td><td><strong>71.53</strong></td></tr>
+                <tr class="ours"><td></td><td></td><td>Ent.</td><td>3.79</td><td>4.11</td><td>4.13</td></tr>
+                <tr class="dataset-sep"><td>OWT</td><td>Duo + DCD</td><td>PPL</td><td><strong>47.13</strong></td><td>96.59</td><td>108.21</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>2.80</td><td>3.77</td><td>4.82</td></tr>
+                <tr><td></td><td>Duo + Di4C</td><td>PPL</td><td>97.77</td><td>165.81</td><td>150.67</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>3.36</td><td>4.65</td><td>4.81</td></tr>
+                <tr><td></td><td>MDLM + SDTT</td><td>PPL</td><td>1261</td><td>877.22</td><td>339.73</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>5.26</td><td>5.34</td><td>5.38</td></tr>
+                <tr><td></td><td>MDLM + Di4C</td><td>PPL</td><td>1299</td><td>758.23</td><td>239.27</td></tr>
+                <tr><td></td><td></td><td>Ent.</td><td>5.29</td><td>5.35</td><td>5.40</td></tr>
+                <tr class="ours"><td></td><td><strong>DFM (PSD)</strong></td><td>PPL</td><td>180.29</td><td>152.83</td><td>122.32</td></tr>
+                <tr class="ours"><td></td><td></td><td>Ent.</td><td>4.91</td><td>5.03</td><td>5.10</td></tr>
+                <tr class="ours"><td></td><td><strong>DFM (ESD)</strong></td><td>PPL</td><td>5.33</td><td><strong>108.91</strong></td><td><strong>77.08</strong></td></tr>
+                <tr class="ours"><td></td><td></td><td>Ent.</td><td>0.26</td><td>5.15</td><td>5.27</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tables-row__col">
+          <h3>Table 2: Distillation Ablation</h3>
+          <p class="table-caption">Gen. PPL (&darr;) / entropy across NFEs. Each cell: PPL (top), entropy (bottom).</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Dataset</th><th>Stage</th><th>1</th><th>2</th><th>4</th><th>8</th><th>16</th><th>128</th><th>256</th><th>1024</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>LM1B</td><td>Diagonal</td><td>2.05</td><td>69.59</td><td>204</td><td>125</td><td>102</td><td>75.82</td><td>72.75</td><td>68.33</td></tr>
+                <tr><td></td><td></td><td>0.76</td><td>2.87</td><td>4.37</td><td>4.32</td><td>4.27</td><td>4.19</td><td>4.17</td><td>4.16</td></tr>
+                <tr class="ours"><td></td><td><strong>+ PSD</strong></td><td>94.08</td><td>87.42</td><td>78.89</td><td>69.90</td><td>64.90</td><td>58.38</td><td>56.59</td><td>56.31</td></tr>
+                <tr class="ours"><td></td><td></td><td>4.06</td><td>4.08</td><td>4.10</td><td>4.10</td><td>4.11</td><td>4.10</td><td>4.10</td><td>4.11</td></tr>
+                <tr class="ours"><td></td><td><strong>+ ESD</strong></td><td>68.11</td><td>77.60</td><td>71.53</td><td>65.61</td><td>59.92</td><td>55.70</td><td>56.88</td><td>58.27</td></tr>
+                <tr class="ours"><td></td><td></td><td>3.79</td><td>4.11</td><td>4.13</td><td>4.13</td><td>4.13</td><td>4.11</td><td>4.12</td><td>4.12</td></tr>
+                <tr class="dataset-sep"><td>OWT</td><td>Diagonal</td><td>29.79</td><td>9.90</td><td>56.03</td><td>181</td><td>122</td><td>61.92</td><td>55.63</td><td>47.07</td></tr>
+                <tr><td></td><td></td><td>1.55</td><td>0.91</td><td>2.84</td><td>5.20</td><td>5.52</td><td>5.28</td><td>5.22</td><td>5.12</td></tr>
+                <tr class="ours"><td></td><td><strong>+ PSD</strong></td><td>180</td><td>153</td><td>122</td><td>98.54</td><td>82.51</td><td>56.00</td><td>51.81</td><td>47.82</td></tr>
+                <tr class="ours"><td></td><td></td><td>4.91</td><td>5.03</td><td>5.10</td><td>5.11</td><td>5.09</td><td>5.00</td><td>4.97</td><td>4.97</td></tr>
+                <tr class="ours"><td></td><td><strong>+ ESD</strong></td><td>5.33</td><td>109</td><td>77.08</td><td>62.98</td><td>55.03</td><td>41.90</td><td>39.08</td><td>36.48</td></tr>
+                <tr class="ours"><td></td><td></td><td>0.26</td><td>5.15</td><td>5.27</td><td>5.23</td><td>5.18</td><td>5.04</td><td>5.00</td><td>4.95</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Table 3: Classifier-Free Guidance</h3>
+          <p class="table-caption">Gen. PPL (&darr;) and entropy across CFG scales &omega;. Four blocks of 256 tokens, 1024 steps each.</p>
+          <div class="table-scroll">
+            <table class="table--compact">
+              <thead><tr><th>&omega;</th><th>Gen. PPL &darr;</th><th>Entropy</th></tr></thead>
+              <tbody>
+                <tr><td>0.0</td><td>56.31</td><td>5.20</td></tr>
+                <tr><td>0.5</td><td>46.78</td><td>5.06</td></tr>
+                <tr><td>1.0</td><td>36.44</td><td>4.94</td></tr>
+                <tr><td>1.5</td><td>33.22</td><td>4.87</td></tr>
+                <tr><td>2.0</td><td><strong>30.98</strong></td><td>4.81</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Example Generations -->
+      <div class="results-samples">
+        <h3>Example Generations (LM1B)</h3>
+        <div class="samples-grid">
+          <div class="sample-card">
+            <div class="sample-header">
+              <span class="sample-tag">NFE = 2</span>
+              <span class="sample-model">DFM (ESD)</span>
+              <span class="sample-stats">PPL: 53.88 &middot; Ent: 4.05</span>
+            </div>
+            <p class="sample-text">[CLS] at the time they said they were the foundation for enough children for the missing school. [CLS] the only news is, despite the fact that i still not be seen enough. [CLS] " at the same time, the club is often a smallon, but i am m going to have to [CLS] we give our back to our country. [CLS] an he said he ' s now home.</p>
+          </div>
+          <div class="sample-card">
+            <div class="sample-header">
+              <span class="sample-tag">NFE = 2</span>
+              <span class="sample-model">DFM (PSD)</span>
+              <span class="sample-stats">PPL: 83.64 &middot; Ent: 4.10</span>
+            </div>
+            <p class="sample-text">[CLS] what to do they said they want that is for to children for the afghan people. [CLS] the only news is, though the fact that a still not was seen enough. [CLS] " at the same time, the weekend is a comhenon, but in that is a major from across on a continent and in the whole country.</p>
+          </div>
+          <div class="sample-card">
+            <div class="sample-header">
+              <span class="sample-tag">NFE = 1024</span>
+              <span class="sample-model">DFM (ESD)</span>
+              <span class="sample-stats">PPL: 32.84 &middot; Ent: 4.07</span>
+            </div>
+            <p class="sample-text">[CLS] at the time they said they were not caring for enough children for the public school. [CLS] the only news is, despite the fact that i still not be seen enough. [CLS] " at the same time, the economy is getting a smallon, but i ' m going to have to on a plane and back to this country. [CLS] but he said he ' s returning home.</p>
+          </div>
+          <div class="sample-card">
+            <div class="sample-header">
+              <span class="sample-tag">NFE = 1024</span>
+              <span class="sample-model">DFM (PSD)</span>
+              <span class="sample-stats">PPL: 42.09 &middot; Ent: 4.05</span>
+            </div>
+            <p class="sample-text">[CLS] at the time they said they were the foundation for enough children for the haitian people. [CLS] the only news is, despite the fact that i still not be seen enough. [CLS] " at the same time, the economy is often a smallon, but i ' m going to have gone on and give and back to this country. [CLS] and he said he ' s now home.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
