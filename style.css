@@ -921,6 +921,208 @@ details[open] summary {
   }
 }
 
+/* ── 768px: tablets ── */
+@media (max-width: 768px) {
+  .hero__split {
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  .hero__split .hero__abstract {
+    text-align: center;
+  }
+  .hero__figure {
+    width: 80%;
+    max-width: 380px;
+  }
+
+  .motivation-split {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .motivation-canvas-wrap {
+    flex: none;
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .bg-split {
+    flex-direction: column;
+  }
+  .bg-canvas-wrap {
+    flex: none;
+    width: 100%;
+    position: static;
+  }
+  .bg-canvas-wrap canvas,
+  .anim-stage canvas {
+    height: 320px;
+  }
+
+  .tables-row {
+    flex-direction: column;
+  }
+
+  .footer-columns {
+    flex-direction: column;
+    align-items: center;
+  }
+  .concurrent-works {
+    flex: none;
+    width: 100%;
+    max-width: 560px;
+  }
+
+  .samples-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── 600px: phones ── */
+@media (max-width: 600px) {
+  body {
+    font-size: 16px;
+  }
+
+  .hero {
+    padding: 2rem 1.2rem;
+    min-height: auto;
+  }
+  .hero__top {
+    max-width: 100%;
+  }
+  .hero__title {
+    font-size: 2.2rem;
+  }
+  .hero__links {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .hero__figure {
+    width: 90%;
+  }
+
+  .motivation-section {
+    padding: 2.5rem 1.2rem;
+  }
+  .motivation-canvas-wrap canvas {
+    height: 280px;
+  }
+
+  .background-section {
+    padding: 1.5rem 1.2rem 3rem;
+  }
+  .bg-block h2 {
+    font-size: 1.3rem;
+  }
+  .bg-canvas-wrap canvas,
+  .anim-stage canvas {
+    height: 260px;
+  }
+  .bg-text p {
+    font-size: 0.92em;
+  }
+
+  .simplex-group > .scroll-canvas-sticky,
+  .scroll-canvas-sticky {
+    height: 40vh;
+  }
+  .scroll-step {
+    min-height: 35vh;
+  }
+  .simplex-text-column,
+  .scroll-text-track {
+    padding: 0 1rem;
+  }
+
+  .text-section h2,
+  .scroll-step h2 {
+    font-size: 1.2rem;
+  }
+
+  .results-section {
+    padding: 2.5rem 1rem;
+  }
+  .results-inner--wide {
+    max-width: 100%;
+  }
+  .results-tables table,
+  .results-section table {
+    font-size: 0.62em;
+  }
+  .results-section th,
+  .results-section td {
+    padding: 0.25rem 0.35rem;
+  }
+
+  .sample-card {
+    padding: 0.8rem;
+  }
+
+  details summary {
+    font-size: 0.8em;
+    padding: 0.5rem 0.8rem;
+  }
+  .proof-body {
+    padding: 0.7rem;
+    font-size: 0.85em;
+  }
+
+  .katex {
+    font-size: 1.05em;
+  }
+  .display-math .katex-display {
+    font-size: 0.95em;
+    overflow-x: auto;
+  }
+}
+
+/* ── 480px: small phones ── */
+@media (max-width: 480px) {
+  .hero__title {
+    font-size: 1.8rem;
+  }
+  .hero__eyebrow {
+    font-size: 0.7em;
+  }
+  .hero__author-names {
+    font-size: 0.82em;
+  }
+  .hero__abstract {
+    font-size: 0.88em;
+  }
+
+  .motivation-text h2,
+  .bg-block h2 {
+    font-size: 1.15rem;
+  }
+
+  .bg-canvas-wrap canvas,
+  .anim-stage canvas,
+  .motivation-canvas-wrap canvas {
+    height: 220px;
+  }
+
+  .simplex-group > .scroll-canvas-sticky,
+  .scroll-canvas-sticky {
+    height: 35vh;
+  }
+
+  .katex {
+    font-size: 0.95em;
+  }
+  .display-math .katex-display {
+    font-size: 0.88em;
+  }
+
+  .citation-box {
+    padding: 1.2rem 1rem;
+  }
+  .citation-box pre {
+    font-size: 0.72em;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════
    KATEX OVERRIDES
    ═══════════════════════════════════════════════════════════ */
