@@ -794,8 +794,8 @@ details[open] summary {
 
 .concurrent-card {
   display: block;
-  background: rgba(242, 238, 224, 0.4);
-  border: 1px solid rgba(195, 195, 195, 0.5);
+  background: rgba(144, 160, 170, 0.08);
+  border: 1px solid rgba(144, 160, 170, 0.2);
   border-radius: 6px;
   padding: 0.7rem 1rem;
   margin-bottom: 0.6rem;
