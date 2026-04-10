@@ -82,12 +82,9 @@
 
   // ---------- thumbnails ----------
   const THUMBS = { noise: new Image(), mid: new Image(), clean: new Image() };
-  // Resolve paths relative to the script's own location
-  var _scriptDir = 'dfms/';
-  try { _scriptDir = document.currentScript.src.replace(/[^/]*$/, ''); } catch(e) {}
-  THUMBS.noise.src = _scriptDir + 'img/dt-flower-noise.png';
-  THUMBS.mid.src   = _scriptDir + 'img/dt-flower-mid.png';
-  THUMBS.clean.src = _scriptDir + 'img/dt-flower-clean.png';
+  THUMBS.noise.src = 'dfms/img/dt-flower-noise.png';
+  THUMBS.mid.src   = 'dfms/img/dt-flower-mid.png';
+  THUMBS.clean.src = 'dfms/img/dt-flower-clean.png';
   const THUMB_PX = 52;
 
   // ---------- layout ----------
