@@ -235,12 +235,20 @@ body {
   border-top: 1px solid rgba(46, 69, 82, 0.08);
 }
 
-.motivation-inner {
-  max-width: 680px;
+.motivation-split {
+  max-width: 1200px;
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3rem;
 }
 
-.motivation-inner h2 {
+.motivation-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.motivation-text h2 {
   font-size: clamp(1.4rem, 2.5vw, 2rem);
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -248,9 +256,30 @@ body {
   color: var(--ink);
 }
 
-.motivation-inner p {
+.motivation-text p {
   margin-bottom: 1rem;
   line-height: 1.75;
+}
+
+.motivation-canvas-wrap {
+  flex: 0 0 420px;
+}
+
+.motivation-canvas-wrap canvas {
+  width: 100%;
+  height: 360px;
+  display: block;
+  border-radius: 8px;
+}
+
+@media (max-width: 800px) {
+  .motivation-split {
+    flex-direction: column;
+  }
+  .motivation-canvas-wrap {
+    flex: none;
+    width: 100%;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════

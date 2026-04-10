@@ -76,29 +76,34 @@
   <!--  MOTIVATION                                            -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <section class="motivation-section">
-    <div class="motivation-inner">
-      <h2>Why Flow Maps for Language?</h2>
-      <p>
-        Autoregressive models generate text one token at a time&mdash;a fundamental
-        serial bottleneck. Flow and diffusion models offer a path to parallel generation
-        by modeling the transport of noise into data via differential equations, but
-        solving those equations at inference time requires many sequential network
-        evaluations. <strong>Flow maps</strong> resolve this: they compress the entire
-        generative trajectory into a single-step mapping, enabling generation of full
-        text sequences from noise in one forward pass.
-      </p>
-      <p>
-        However, standard flow map objectives use \(L^2\) regression losses designed for
-        Euclidean space. Text is discrete: the natural prediction target is a probability
-        distribution over a vocabulary, living on the probability simplex&mdash;not in
-        \(\mathbb{R}^K\). <em>Discrete Flow Maps</em> resolve this mismatch by
-        reparameterizing the flow map through the <strong>mean denoiser</strong>, an object
-        that natively lives on the simplex, enabling training with cross-entropy and KL
-        divergence losses that respect the geometry of discrete data.
-      </p>
-      <p>
-        The mathematical scaffolding for this framework is what follows.
-      </p>
+    <div class="motivation-split">
+      <div class="motivation-text">
+        <h2>Why Flow Maps for Language?</h2>
+        <p>
+          Autoregressive models generate text one token at a time&mdash;a fundamental
+          serial bottleneck. Flow and diffusion models offer a path to parallel generation
+          by modeling the transport of noise into data via differential equations, but
+          solving those equations at inference time requires many sequential network
+          evaluations. <strong>Flow maps</strong> resolve this: they compress the entire
+          generative trajectory into a single-step mapping, enabling generation of full
+          text sequences from noise in one forward pass.
+        </p>
+        <p>
+          However, standard flow map objectives use \(L^2\) regression losses designed for
+          Euclidean space. Text is discrete: the natural prediction target is a probability
+          distribution over a vocabulary, living on the probability simplex&mdash;not in
+          \(\mathbb{R}^K\). <em>Discrete Flow Maps</em> resolve this mismatch by
+          reparameterizing the flow map through the <strong>mean denoiser</strong>, an object
+          that natively lives on the simplex, enabling training with cross-entropy and KL
+          divergence losses that respect the geometry of discrete data.
+        </p>
+        <p>
+          The mathematical scaffolding for this framework is what follows.
+        </p>
+      </div>
+      <div class="motivation-canvas-wrap">
+        <canvas id="anim-simplex-row"></canvas>
+      </div>
     </div>
   </section>
 
@@ -806,5 +811,6 @@
   <script src="dfms/dynamical-transport-anim.js"></script>
   <script src="dfms/interpolant-anim.js"></script>
   <script src="dfms/flow-map-anim.js"></script>
+  <script src="dfms/simplex-row.js"></script>
 </body>
 </html>
