@@ -192,9 +192,10 @@
       }
       place(s.lab, s.px, thumbY + THUMB_PX + 12);
     }
-    // long semigroup label would overflow the right edge — pull it in
+    // shift last label right to avoid overlap with middle label
+    place(L.Xst, pT[0] + 30, thumbY + THUMB_PX + 12);
     const xstW = L.Xst.offsetWidth;
-    if (pT[0] + xstW / 2 > W) place(L.Xst, W - xstW / 2 - 2, thumbY + THUMB_PX + 12);
+    if (pT[0] + 30 + xstW / 2 > W) place(L.Xst, W - xstW / 2 - 2, thumbY + THUMB_PX + 12);
 
     requestAnimationFrame(draw);
   }
