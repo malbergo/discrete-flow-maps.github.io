@@ -756,7 +756,7 @@ details[open] summary {
   gap: 2rem;
   max-width: 900px;
   margin: 0 auto 2rem;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 @media (max-width: 700px) {
@@ -779,6 +779,8 @@ details[open] summary {
 .concurrent-works {
   flex: 0 0 320px;
   text-align: left;
+  display: flex;
+  flex-direction: column;
 }
 
 .concurrent-works h3 {
