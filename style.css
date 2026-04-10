@@ -227,6 +227,164 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   MOTIVATION
+   ═══════════════════════════════════════════════════════════ */
+
+.motivation-section {
+  padding: 4rem 2rem;
+  border-top: 1px solid rgba(46, 69, 82, 0.08);
+}
+
+.motivation-inner {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.motivation-inner h2 {
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.2rem;
+  color: var(--ink);
+}
+
+.motivation-inner p {
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BACKGROUND — flow theory sections with side-by-side canvas
+   ═══════════════════════════════════════════════════════════ */
+
+.background-section {
+  padding: 2rem 2rem 4rem;
+  border-top: 1px solid rgba(46, 69, 82, 0.08);
+}
+
+.background-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.bg-block {
+  margin-bottom: 4rem;
+}
+
+.bg-block:last-child {
+  margin-bottom: 0;
+}
+
+.bg-block h2 {
+  font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+  color: var(--ink);
+}
+
+.bg-split {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-start;
+}
+
+.bg-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.bg-text p {
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+.bg-canvas-wrap {
+  flex: 0 0 340px;
+  position: sticky;
+  top: 2rem;
+}
+
+.bg-canvas-wrap canvas {
+  width: 100%;
+  height: 280px;
+  display: block;
+  border-radius: 8px;
+  background: var(--simplex-fill);
+}
+
+.anim-stage {
+  position: relative;
+}
+
+.anim-stage canvas {
+  width: 100%;
+  height: 280px;
+  display: block;
+  border-radius: 8px;
+  background: var(--simplex-fill);
+}
+
+.bg-caption {
+  font-size: 0.78em;
+  color: var(--cloud);
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+@media (max-width: 800px) {
+  .bg-split {
+    flex-direction: column;
+  }
+  .bg-canvas-wrap {
+    flex: none;
+    width: 100%;
+    position: static;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   COLLAPSIBLE PROOFS
+   ═══════════════════════════════════════════════════════════ */
+
+details {
+  margin: 1rem 0;
+  border: 1px solid rgba(46, 69, 82, 0.12);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+details summary {
+  padding: 0.6rem 1rem;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: var(--teal);
+  cursor: pointer;
+  background: rgba(47, 83, 63, 0.04);
+  transition: background 0.2s;
+}
+
+details summary:hover {
+  background: rgba(47, 83, 63, 0.08);
+}
+
+details[open] summary {
+  border-bottom: 1px solid rgba(46, 69, 82, 0.08);
+}
+
+.proof-body {
+  padding: 1rem;
+  font-size: 0.9em;
+  line-height: 1.7;
+}
+
+.proof-body p {
+  margin-bottom: 0.8rem;
+}
+
+/* ═══════════════════════════════════════════════════════════
    SIMPLEX GROUP — shared sticky canvas for theory sections
    ═══════════════════════════════════════════════════════════ */
 

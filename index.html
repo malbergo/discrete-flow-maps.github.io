@@ -73,6 +73,183 @@
   </header>
 
   <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  MOTIVATION                                            -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="motivation-section">
+    <div class="motivation-inner">
+      <h2>Why Flow Maps for Language?</h2>
+      <p>
+        Autoregressive models generate text one token at a time&mdash;a fundamental
+        serial bottleneck. Flow and diffusion models offer a path to parallel generation
+        by modeling the transport of noise into data via differential equations, but
+        solving those equations at inference time requires many sequential network
+        evaluations. <strong>Flow maps</strong> resolve this: they compress the entire
+        generative trajectory into a single-step mapping, enabling generation of full
+        text sequences from noise in one forward pass.
+      </p>
+      <p>
+        However, standard flow map objectives use \(L^2\) regression losses designed for
+        Euclidean space. Text is discrete: the natural prediction target is a probability
+        distribution over a vocabulary, living on the probability simplex&mdash;not in
+        \(\mathbb{R}^K\). <em>Discrete Flow Maps</em> resolve this mismatch by
+        reparameterizing the flow map through the <strong>mean denoiser</strong>, an object
+        that natively lives on the simplex, enabling training with cross-entropy and KL
+        divergence losses that respect the geometry of discrete data.
+      </p>
+      <p>
+        The mathematical scaffolding for this framework is what follows.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  BACKGROUND: Measure Transport & Flows                 -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section class="background-section">
+    <div class="background-inner">
+
+      <!-- Measure Transport: the static picture -->
+      <div class="bg-block">
+        <h2>Measure Transport</h2>
+        <div class="bg-split">
+          <div class="bg-text">
+            <p>
+              The context we need is that of <strong>measure transport</strong>: a map
+              which deterministically connects samples from one distribution to samples
+              from another. Given a base distribution \(\rho_0\) and a target \(\rho_1\),
+              we seek a map \(T\) such that \(T_\sharp \rho_0 = \rho_1\)&mdash;every
+              sample \(x_0 \sim \rho_0\) is assigned to a sample \(T(x_0) = x_1\).
+            </p>
+          </div>
+          <div class="bg-canvas-wrap">
+            <canvas id="anim-map-diagram"></canvas>
+            <p class="bg-caption">Sample-by-sample correspondence under the pushforward \(T_\sharp \rho_0 = \rho_1\).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamical Measure Transport -->
+      <div class="bg-block">
+        <h2>Dynamical Transport</h2>
+        <div class="bg-split">
+          <div class="bg-text">
+            <p>
+              A powerful way to realize this map is to make the connection <em>dynamic</em>,
+              with a continuous path of measures \(\rho_t\) for \(t \in [0,1]\) bridging the
+              two. At the level of individual samples, this is instantiated by a velocity
+              field \(b_t\) via the <strong>probability flow ODE</strong>:
+            </p>
+            <p class="display-math">
+              \[\dot x_t = b_t(x_t), \qquad x_0 \sim \rho_0,\]
+            </p>
+            <p>
+              which guides the instantaneous change of \(x_0\) to any \(x_t\). Mass is
+              locally conserved: the path of densities satisfies the continuity equation
+              \(\partial_t \rho_t + \nabla \cdot (\rho_t\, b_t) = 0\).
+            </p>
+            <details><summary>Proof: trajectories realize the continuity equation</summary>
+              <div class="proof-body">
+                <p>Take the total derivative of \(\rho_t\) along \(X_t\) via the chain rule:</p>
+                <p class="display-math">\[\frac{d}{dt}\rho_t(X_t(x)) = \partial_t \rho_t(X_t(x)) + \nabla \rho_t(X_t(x)) \cdot \dot X_t(x).\]</p>
+                <p>Expanding the divergence in the continuity equation and choosing \(\dot X_t = b_t(X_t)\), the terms cancel, leaving:</p>
+                <p class="display-math">\[\frac{d}{dt}\rho_t(X_t(x)) = -\rho_t(X_t(x))\,\nabla \cdot b_t(X_t(x)).\]</p>
+                <p>Integrating this ODE gives the density along trajectories:</p>
+                <p class="display-math">\[\rho_t(X_t(x)) = \rho_0(x)\,\exp\!\left(-\int_0^t \nabla \cdot b_s(X_s(x))\,ds\right).\]</p>
+              </div>
+            </details>
+          </div>
+          <div class="bg-canvas-wrap">
+            <canvas id="anim-dynamical-transport"></canvas>
+            <p class="bg-caption">A particle riding the velocity field along its characteristic curve from \(\rho_0\) to \(\rho_1\).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stochastic Interpolants and Flow Matching -->
+      <div class="bg-block">
+        <h2>Stochastic Interpolants</h2>
+        <div class="bg-split">
+          <div class="bg-text">
+            <p>
+              How do we choose the path \(\rho_t\) and learn the velocity field? The
+              <strong>stochastic interpolant</strong> provides a direct answer. Draw pairs
+              \((x_0, x_1) \sim \rho_0 \times \rho_1\) and connect them by straight lines:
+            </p>
+            <p class="display-math">
+              \[I_t = (1-t)\,x_0 + t\,x_1.\]
+            </p>
+            <p>
+              The distribution of \(I_t\) at any time defines \(\rho_t\). The velocity
+              field that traverses this path of measures is the conditional average of the
+              slopes through any point:
+            </p>
+            <p class="display-math">
+              \[b_t(x) = \mathbb{E}[\dot I_t \mid I_t = x],\]
+            </p>
+            <p>
+              which we learn by regressing a network \(\hat b_t(x)\) against \(\dot I_t\)
+              on samples&mdash;the <strong>flow matching</strong> objective.
+            </p>
+            <details><summary>Proof: \(b_t(x) = \mathbb{E}[\dot I_t \mid I_t = x]\) minimizes the flow matching loss</summary>
+              <div class="proof-body">
+                <p>The flow matching loss is least-squares regression of \(\dot I_t\) onto functions of \(I_t\):</p>
+                <p class="display-math">\[b_t = \operatorname*{arg\,min}_{\hat b_t} \int_0^1 \mathbb{E}\,\bigl|\hat b_t(I_t) - \dot I_t\bigr|^2\,dt.\]</p>
+                <p>The least-squares predictor of any random variable \(Y\) from observation \(X\) is the conditional expectation \(\mathbb{E}[Y \mid X]\)&mdash;this is the regression-function characterization (Hilbert projection in \(L^2\)). So \(b_t(x) = \mathbb{E}[\dot I_t \mid I_t = x]\).</p>
+              </div>
+            </details>
+          </div>
+          <div class="bg-canvas-wrap">
+            <div class="anim-stage" id="stage-interpolant"><canvas id="anim-interpolant"></canvas></div>
+            <p class="bg-caption">Pairs \((x_0, x_1)\) connected by lines \(I_t\). The amber lines condition on \(I_t = x\); their slopes average to \(b_t(x)\).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- The Flow Map -->
+      <div class="bg-block">
+        <h2>The Flow Map</h2>
+        <div class="bg-split">
+          <div class="bg-text">
+            <p>
+              Solving the ODE at inference requires many sequential evaluations of
+              \(b_t\). The <strong>flow map</strong> \(X_{s,t}(x)\) bypasses this: it is
+              the solution operator that jumps directly from time \(s\) to time \(t\)
+              along the integral curve. In particular, \(X_{0,1}(x_0) = x_1\) produces a
+              sample from \(\rho_1\) in <strong>one step</strong>.
+            </p>
+            <p>
+              Three equivalent identities characterize the flow map&mdash;enforcing any
+              one is sufficient for learning \(X_{s,t}\):
+            </p>
+            <p>
+              <strong>Semigroup:</strong> \(X_{s,t}(x) = X_{u,t}(X_{s,u}(x))\)
+            </p>
+            <p>
+              <strong>Lagrangian:</strong> \(\partial_t X_{s,t}(x) = b_t(X_{s,t}(x))\)
+            </p>
+            <p>
+              <strong>Eulerian:</strong> \(\partial_s X_{s,t}(x) + b_s(x) \cdot \nabla_x X_{s,t}(x) = 0\)
+            </p>
+            <p>
+              The natural parameterization writes the flow map as a displacement by an
+              <em>average velocity</em>:
+              \(X_{s,t}(x) = x + (t-s)\,v_{s,t}(x)\). No ODE solve appears in the
+              loss&mdash;the network is supervised purely by the algebraic structure any
+              flow map must obey. We next move to the simplex, where these identities
+              take a particularly clean form.
+            </p>
+          </div>
+          <div class="bg-canvas-wrap">
+            <div class="anim-stage" id="stage-flow-map"><canvas id="anim-flow-map"></canvas></div>
+            <p class="bg-caption">The flow map \(X_{s,t}\) jumps along the integral curve. The semigroup identity: the two-hop \(x_s \to x_u \to x_t\) equals the direct hop.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
   <!--  SIMPLEX GROUP: shared sticky canvas for all theory    -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <div class="simplex-group">
@@ -624,5 +801,10 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
   <script>document.write('<script src="main.js?v=' + Date.now() + '"><\/script>');</script>
+  <!-- Background flow animations (self-mounting IIFEs) -->
+  <script src="dfms/map-diagram.js"></script>
+  <script src="dfms/dynamical-transport-anim.js"></script>
+  <script src="dfms/interpolant-anim.js"></script>
+  <script src="dfms/flow-map-anim.js"></script>
 </body>
 </html>
