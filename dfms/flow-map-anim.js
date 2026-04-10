@@ -174,6 +174,16 @@
       { px: midX,  img: THUMBS.mid,   lab: L.Xsu },
       { px: pT[0], img: THUMBS.clean, lab: L.Xst },
     ];
+    ctx.setLineDash([2, 4]);
+    ctx.strokeStyle = 'rgba(60,60,60,0.3)';
+    ctx.lineWidth = 1;
+    for (const s of slots) {
+      ctx.beginPath();
+      ctx.moveTo(s.px, padT + 10);
+      ctx.lineTo(s.px, thumbY - 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
     for (const s of slots) {
       const ix = s.px - THUMB_PX / 2;
       if (s.img.complete && s.img.naturalWidth > 0) {
