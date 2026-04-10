@@ -162,8 +162,8 @@
     dot(ctx, ...pU, '#8a6ad6', 6);
     dot(ctx, ...pT, '#8a6ad6', 6);
     place(L.xs, pS[0] - 14, pS[1] + 14);
-    place(L.xu, pU[0] + 16, pU[1] + 12);
-    place(L.xt, pT[0],      pT[1] - 16);
+    place(L.xu, pU[0] + 18, pU[1] + 20);
+    place(L.xt, pT[0] + 14, pT[1] - 12);
 
     // ---- thumbnails + droplines ----
     const thumbY = H - padB + 8;
