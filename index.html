@@ -80,25 +80,26 @@
       <div class="motivation-text">
         <h2>Why Flow Maps for Language?</h2>
         <p>
-          Autoregressive models generate text one token at a time&mdash;a fundamental
-          serial bottleneck. Flow and diffusion models offer a path to parallel generation
-          by modeling the transport of noise into data via differential equations, but
-          solving those equations at inference time requires many sequential network
-          evaluations. <strong>Flow maps</strong> resolve this: they compress the entire
-          generative trajectory into a single-step mapping, enabling generation of full
-          text sequences from noise in one forward pass.
+          Autoregressive models generate text one token at a time. This sequential
+          bottleneck is fundamental&mdash;no matter how fast the hardware, you still
+          pay a cost proportional to sequence length. Flow and diffusion models sidestep
+          this by drawing many tokens at once, but they require solving an ODE at
+          inference, which means many sequential network evaluations of its own.
         </p>
         <p>
-          However, standard flow map objectives use \(L^2\) regression losses designed for
-          Euclidean space. Text is discrete: the natural prediction target is a probability
-          distribution over a vocabulary, living on the probability simplex&mdash;not in
-          \(\mathbb{R}^K\). <em>Discrete Flow Maps</em> resolve this mismatch by
-          reparameterizing the flow map through the <strong>mean denoiser</strong>, an object
-          that natively lives on the simplex, enabling training with cross-entropy and KL
-          divergence losses that respect the geometry of discrete data.
+          <strong>Flow maps</strong> cut through both problems: they learn to jump
+          directly from noise to data in a single forward pass, compressing the entire
+          ODE trajectory into one step. The catch? Standard flow map training uses
+          \(L^2\) regression&mdash;but text lives on the probability simplex, not in
+          Euclidean space. Treating a probability distribution like a coordinate in
+          \(\mathbb{R}^K\) is a geometric mismatch.
         </p>
         <p>
-          The mathematical scaffolding for this framework is what follows.
+          <em>Discrete Flow Maps</em> fix this by reparameterizing the flow map through
+          the <strong>mean denoiser</strong>&mdash;an object that natively lives on the
+          simplex. The network outputs are probability distributions, the targets are
+          probability distributions, and every loss becomes a KL divergence or
+          cross-entropy. The mathematical scaffolding for this is what follows.
         </p>
       </div>
       <div class="motivation-canvas-wrap">
@@ -119,11 +120,12 @@
         <div class="bg-split">
           <div class="bg-text">
             <p>
-              The context we need is that of <strong>measure transport</strong>: a map
-              which deterministically connects samples from one distribution to samples
+              The context we need going forward is <strong>measure transport</strong>: a
+              map that takes every sample from one distribution and sends it to a sample
               from another. Given a base distribution \(\rho_0\) and a target \(\rho_1\),
-              we seek a map \(T\) such that \(T_\sharp \rho_0 = \rho_1\)&mdash;every
-              sample \(x_0 \sim \rho_0\) is assigned to a sample \(T(x_0) = x_1\).
+              we want a map \(T\) so that \(T_\sharp \rho_0 = \rho_1\)&mdash;draw
+              \(x_0 \sim \rho_0\), return \(T(x_0) = x_1\), and the collection of
+              outputs has distribution \(\rho_1\).
             </p>
           </div>
           <div class="bg-canvas-wrap">
@@ -139,18 +141,26 @@
         <div class="bg-split">
           <div class="bg-text">
             <p>
-              A powerful way to realize this map is to make the connection <em>dynamic</em>,
-              with a continuous path of measures \(\rho_t\) for \(t \in [0,1]\) bridging the
-              two. At the level of individual samples, this is instantiated by a velocity
-              field \(b_t\) via the <strong>probability flow ODE</strong>:
+              A particularly effective way to build this map is to make the connection
+              <em>dynamic</em>: instead of one big jump, lay down a continuous sequence of
+              measures \(\rho_t\) for \(t \in [0,1]\) that bridges \(\rho_0\) to \(\rho_1\).
+              At the level of an individual sample, a velocity field \(b_t\) tells it where
+              to go next via the <strong>probability flow ODE</strong>:
             </p>
             <p class="display-math">
               \[\dot x_t = b_t(x_t), \qquad x_0 \sim \rho_0,\]
             </p>
             <p>
               which guides the instantaneous change of \(x_0\) to any \(x_t\). Mass is
-              locally conserved: the path of densities satisfies the continuity equation
-              \(\partial_t \rho_t + \nabla \cdot (\rho_t\, b_t) = 0\).
+              locally conserved&mdash;the path of densities satisfies the continuity
+              equation \(\partial_t \rho_t + \nabla \cdot (\rho_t\, b_t) = 0\), which
+              just says that mass is being shoved around by the velocity without being
+              created or destroyed.
+            </p>
+            <p>
+              The main <strong>learning</strong> problem is: how do we specify a \(\rho_t\)
+              that connects the two distributions, and then learn the velocity field with a
+              neural network?
             </p>
             <details><summary>Proof: trajectories realize the continuity equation</summary>
               <div class="proof-body">
@@ -176,24 +186,27 @@
         <div class="bg-split">
           <div class="bg-text">
             <p>
-              How do we choose the path \(\rho_t\) and learn the velocity field? The
-              <strong>stochastic interpolant</strong> provides a direct answer. Draw pairs
-              \((x_0, x_1) \sim \rho_0 \times \rho_1\) and connect them by straight lines:
+              There is a pretty straightforward way to do this. Imagine randomly drawing
+              pairs \((x_0, x_1) \sim \rho_0 \times \rho_1\) and connecting each pair by a
+              straight line&mdash;a <strong>stochastic interpolant</strong>:
             </p>
             <p class="display-math">
               \[I_t = (1-t)\,x_0 + t\,x_1.\]
             </p>
             <p>
-              The distribution of \(I_t\) at any time defines \(\rho_t\). The velocity
-              field that traverses this path of measures is the conditional average of the
-              slopes through any point:
+              If you keep drawing pairs and constructing \(I_t\), the cloud of points at
+              any time \(t\) defines a density \(\rho_t\). Now, if you want the velocity
+              field that traverses this path of measures, you can intuit it as follows:
+              pick a point \(x\) at time \(t\), look at all the interpolant lines that pass
+              through it, and average their slopes. That average is the velocity:
             </p>
             <p class="display-math">
               \[b_t(x) = \mathbb{E}[\dot I_t \mid I_t = x],\]
             </p>
             <p>
               which we learn by regressing a network \(\hat b_t(x)\) against \(\dot I_t\)
-              on samples&mdash;the <strong>flow matching</strong> objective.
+              on samples&mdash;the <strong>flow matching</strong> objective. Inference is
+              then ODE integration of \(\dot x = b_t(x)\) with many network evaluations.
             </p>
             <details><summary>Proof: \(b_t(x) = \mathbb{E}[\dot I_t \mid I_t = x]\) minimizes the flow matching loss</summary>
               <div class="proof-body">
@@ -216,15 +229,20 @@
         <div class="bg-split">
           <div class="bg-text">
             <p>
-              Solving the ODE at inference requires many sequential evaluations of
-              \(b_t\). The <strong>flow map</strong> \(X_{s,t}(x)\) bypasses this: it is
-              the solution operator that jumps directly from time \(s\) to time \(t\)
-              along the integral curve. In particular, \(X_{0,1}(x_0) = x_1\) produces a
-              sample from \(\rho_1\) in <strong>one step</strong>.
+              Instead of having to solve the ODE, it would be nice to directly output what
+              the solution would be at any time \(t\). That is exactly what the
+              <strong>flow map</strong> \(X_{s,t}(x)\) does&mdash;it is the solution
+              operator that jumps directly from time \(s\) to time \(t\) along the integral
+              curve. You can think of it as an arbitrary-step integrator with step size
+              \(|t - s|\). In particular, \(X_{0,1}(x_0) = x_1\) produces a sample from
+              \(\rho_1\) in <strong>one step</strong>.
             </p>
             <p>
-              Three equivalent identities characterize the flow map&mdash;enforcing any
-              one is sufficient for learning \(X_{s,t}\):
+              If we can write down the equations that \(X_{s,t}\) must satisfy to uniquely
+              be the solution operator of the ODE, then enforcing those equations gives us
+              a mechanism for learning it directly. There are three such identities, and
+              they are not independent&mdash;each implies the others given
+              \(X_{s,s}(x) = x\)&mdash;so enforcing any one is sufficient:
             </p>
             <p>
               <strong>Semigroup:</strong> \(X_{s,t}(x) = X_{u,t}(X_{s,u}(x))\)
@@ -340,20 +358,30 @@
         <div class="scroll-step" data-step="0">
           <h2>The Instantaneous Denoiser</h2>
           <p>
-            The <strong style="color: var(--teal)">instantaneous
-            denoiser</strong> is the conditional expectation of the
-            clean data given the noisy observation:
+            The average-velocity parameterization is fine in \(\mathbb{R}^d\), but
+            \(v_{s,t}\) is a <em>direction</em>, not a probability distribution, so it
+            can&rsquo;t be trained with cross-entropy. When \(x_1\) is one-hot there is a
+            tighter object: the <strong style="color: var(--teal)">instantaneous
+            denoiser</strong>&mdash;the conditional expectation of the clean data given
+            the noisy observation:
           </p>
           <p class="display-math">
             \[\begin{aligned}\psi_{s,s}(x_s) &= \mathbb{E}[I_1 \mid I_s = x_s] \\ &= \sum_{i=1}^{K} \underbrace{\mathbb{P}(I_1 = e_i \mid I_s = x_s)}_{p_i}\, e_i.\end{aligned}\]
           </p>
           <p>
-            The velocity field \(b_s(x_s)\) points directly toward the
-            instantaneous denoiser \(\psi_{s,s}(x_s)\).
-            <!-- Each slope targets a vertex; their
-            <strong style="color: var(--gold)">conditional average</strong>
-            targets the denoiser&mdash;the probability-weighted centre of
-            those vertices. -->
+            Because \(\psi_{s,s}\) is a convex combination of vertices, it always lives
+            on the simplex. The velocity field and denoiser are tied algebraically:
+          </p>
+          <p class="display-math">
+            \[b_s(x_s) = \frac{\psi_{s,s}(x_s) - x_s}{1 - s}\]
+          </p>
+          <p>
+            Geometrically: at a fixed point \(x_s\), many interpolant lines pass
+            through&mdash;one per pair \((x_0, x_1)\). Each has slope aimed at its own
+            vertex. The velocity \(b_s(x_s)\) is the conditional average of those slopes,
+            and that average points directly at \(\psi_{s,s}\)&mdash;the
+            probability-weighted centre of the vertices. Following the velocity forward
+            by exactly \(1-s\) lands you on the simplex.
           </p>
         </div>
         <div class="scroll-step" data-step="1">
