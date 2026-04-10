@@ -167,17 +167,19 @@
 
     // ---- thumbnails + droplines ----
     const thumbY = H - padB + 8;
+    // Spread the middle thumbnail left so it doesn't crowd the right one
+    const midX = (pS[0] + pT[0]) / 2;
     const slots = [
-      { px: pS[0], py: pS[1], img: THUMBS.noise, lab: L.Xss },
-      { px: P(U_REST)[0], py: P(U_REST)[1], img: THUMBS.mid, lab: L.Xsu },
-      { px: pT[0], py: pT[1], img: THUMBS.clean, lab: L.Xst },
+      { px: pS[0], py: pS[1], img: THUMBS.noise, lab: L.Xss, dropX: pS[0] },
+      { px: midX,   py: P(U_REST)[1], img: THUMBS.mid, lab: L.Xsu, dropX: P(U_REST)[0] },
+      { px: pT[0], py: pT[1], img: THUMBS.clean, lab: L.Xst, dropX: pT[0] },
     ];
     ctx.setLineDash([2, 4]);
     ctx.strokeStyle = 'rgba(60,60,60,0.4)';
     ctx.lineWidth = 1;
     for (const s of slots) {
       ctx.beginPath();
-      ctx.moveTo(s.px, s.py + 6);
+      ctx.moveTo(s.dropX, s.py + 6);
       ctx.lineTo(s.px, thumbY - 2);
       ctx.stroke();
     }
