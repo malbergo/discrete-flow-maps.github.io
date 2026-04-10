@@ -403,17 +403,10 @@
         <div class="scroll-step" data-step="0">
           <h2>The Mean Denoiser</h2>
           <p>
-            The generative ODE
-          </p>
-          <p class="display-math">
-            \[\dot x_s = b_s(x_s), \qquad x_0 \sim \rho_0,\]
-          </p>
-          <p>
-            traces a trajectory from random noise \(x_0\)
-            to a data point \(x_1\) (a simplex vertex).
-            We mark two points along the trajectory: an earlier time \(x_s\)
-            and a later time \(x_t\). The tangent \(b_s(x_s)\) at \(x_s\) projects onto
-            the simplex at the instantaneous denoiser \(\psi_{s,s}\).
+            Consider two points along the ODE trajectory: an earlier time
+            \(x_s\) and a later time \(x_t\). We already know the tangent at
+            \(x_s\) projects onto the simplex at the instantaneous denoiser
+            \(\psi_{s,s}\). What about the <em>secant</em> from \(x_s\) to \(x_t\)?
           </p>
         </div>
         <div class="scroll-step" data-step="1">
